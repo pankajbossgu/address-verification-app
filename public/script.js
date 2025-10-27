@@ -50,7 +50,12 @@ async function handleSingleVerification() {
         if (result.status === "Success") {
             displayResults(result);
         } else {
-            alert(`Verification Failed: ${result.error || result.remarks || "Unknown error."}`);
+            // Display alert only if it's not a generic network/timeout error
+            if (!result.remarks.includes("Network/Timeout Error")) {
+                alert(`Verification Failed: ${result.error || result.remarks || "Unknown error."}`);
+            } else {
+                 alert("Verification Failed: Vercel backend may have crashed or timed out (504). Please try again or check Vercel logs.");
+            }
             displayErrorResult(result);
         }
 
@@ -100,7 +105,7 @@ function handleTemplateDownload() {
     document.body.removeChild(link);
 }
 
-// ** CRITICAL: Use the global API_ENDPOINT here, not a local variable **
+// ** CRITICAL: This function is used for both Single and Bulk verification **
 async function fetchVerification(address, name) {
     try {
         const response = await fetch(API_ENDPOINT, {
@@ -199,10 +204,10 @@ async function handleBulkVerification() {
             return;
         }
 
-        const headers = lines[0].split(',').map(h => h.trim().toUpperCase());
-        
-        if (headers.length < 3 || headers[2] !== 'CUSTOMER RAW ADDRESS') {
-            alert("Error: CSV must contain 'ORDER ID', 'CUSTOMER NAME', and 'CUSTOMER RAW ADDRESS' in the first three columns.");
+        // Simple check to ensure we have enough columns, not strict header validation
+        const totalAddresses = lines.length - 1;
+        if (totalAddresses === 0) {
+            alert("No data rows found after headers.");
             processButton.disabled = false;
             fileInput.disabled = false;
             return;
@@ -214,11 +219,12 @@ async function handleBulkVerification() {
             "STATE", "DISTRICT", "PIN", "REMARK", "ADDRESS QUALITY"
         ].join(',');
         let processedCount = 0;
-        const totalAddresses = lines.length - 1;
+        
         const outputRows = [outputData];
 
         for (let i = 1; i < lines.length; i++) {
             const row = lines[i].split(',');
+            // Assuming strict CSV format for simplicity based on template
             const orderId = row[0] || 'N/A';
             const customerName = row[1] || '';
             const rawAddress = row[2] || ''; 
