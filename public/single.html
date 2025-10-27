@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Single Address Verification</title>
+    <link rel="stylesheet" href="style.css"> 
+    <style>
+        .form-group { margin-bottom: 20px; text-align: left; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .results-container { margin-top: 30px; text-align: left; border-top: 2px solid #ccc; padding-top: 20px; }
+        .result-block { margin-bottom: 15px; background: #e9ecef; padding: 10px; border-radius: 4px; }
+        .result-block strong { color: #007bff; display: block; margin-bottom: 3px; }
+        #loading-message { display: none; color: #ff0000; font-weight: bold; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="button back-button" style="display: block; margin-bottom: 20px; width: fit-content; margin-left: auto; margin-right: auto;">← Back to Home</a>
+        <h2>Verify Single Address</h2>
+        <div class="form-group">
+            <label for="customerName">Customer Name (Optional)</label>
+            <input type="text" id="customerName" placeholder="Enter Customer Name">
+        </div>
+        <div class="form-group">
+            <label for="rawAddress">Raw Address (Mandatory)</label>
+            <textarea id="rawAddress" rows="4" placeholder="Enter the full raw address here..."></textarea>
+        </div>
+        <button id="verifyButton" class="button primary">Verify Address</button>
+        <div id="loading-message">Processing... Please wait a few seconds.</div>
+
+        <div class="results-container" id="resultsContainer" style="display: none;">
+            <h3>Verification Results</h3>
+            <div class="result-block">
+                <strong>Clean Name:</strong> <span id="out-name"></span>
+            </div>
+            <div class="result-block">
+                <strong>Clean Address Line 1 (Gemini & IndiaPost):</strong> <span id="out-address"></span>
+            </div>
+            <div class="result-block">
+                <strong>Landmark:</strong> <span id="out-landmark"></span>
+            </div>
+            <div class="result-block">
+                <strong>State:</strong> <span id="out-state"></span>
+            </div>
+            <div class="result-block">
+                <strong>District:</strong> <span id="out-district"></span>
+            </div>
+            <div class="result-block">
+                <strong>PIN:</strong> <span id="out-pin"></span>
+            </div>
+            <div class="result-block">
+                <strong>Remarks:</strong> <span id="out-remarks"></span>
+            </div>
+            <div class="result-block">
+                <strong>Address Quality:</strong> <span id="out-quality"></span>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script> 
+</body>
+</html>
