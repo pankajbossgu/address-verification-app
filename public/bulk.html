@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Address Verification</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .upload-section { margin-top: 20px; border: 2px dashed #ccc; padding: 30px; border-radius: 8px; text-align: center; }
+        .upload-section input { display: block; margin: 15px auto; }
+        .progress-container { margin-top: 30px; text-align: left; }
+        .progress-bar { width: 100%; height: 20px; background-color: #e9ecef; border-radius: 5px; overflow: hidden; margin-top: 10px; }
+        .progress-fill { height: 100%; width: 0%; background-color: #28a745; transition: width 0.3s; }
+        #downloadLink { display: none; margin-top: 20px; }
+        #status-message { font-weight: bold; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="button back-button" style="display: block; margin-bottom: 20px; width: fit-content; margin-left: auto; margin-right: auto;">← Back to Home</a>
+        <h2>Bulk Address Verification</h2>
+        
+        <p>1. Download the template file to see the required column structure:</p>
+        <button id="downloadTemplateButton" class="button secondary">Download Template (CSV)</button>
+
+        <div class="upload-section">
+            <p>2. Upload your CSV file (Max 1000 rows recommended):</p>
+            <input type="file" id="csvFileInput" accept=".csv">
+            <p class="note">Columns required: ORDER ID, CUSTOMER NAME, CUSTOMER RAW ADDRESS</p>
+            <button id="processButton" class="button primary" disabled>Start Verification</button>
+        </div>
+
+        <div class="progress-container">
+            <h3>Verification Status</h3>
+            <p id="status-message">Ready to upload.</p>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressBarFill"></div>
+            </div>
+            <a id="downloadLink" class="button primary">Download Verified CSV</a>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
