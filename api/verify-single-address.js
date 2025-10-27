@@ -5,14 +5,18 @@
 const INDIA_POST_API = 'https://api.postalpincode.in/pincode/';
 let pincodeCache = {}; 
 
-const testingKeywords = ['test', 'testing', 'asdf', 'qwer', 'zxcv', 'random', 'gjnj', 'fgjnj'];
-const meaningfulWords = [
+const testingKeywords = ['test', 'testing', 'asdf', 'qwer', 'zxcv', 'random', 'gjnj', 'fgjnj']; 
+const coreMeaningfulWords = [
     "ddadu", "ddadu", "ai", "add", "add-", "raw", "dumping", "grand", "dumping grand",
     "chd", "chd-", "chandigarh", "chandigarh-", "chandigarh", "west", "sector", "sector-",
     "house", "no", "no#", "house no", "house no#", "floor", "first", "first floor",
     "majra", "colony", "dadu", "dadu majra", "shop", "wine", "wine shop", "house", "number",
     "tq", "job", "dist"
 ];
+
+// Combine both lists for comprehensive cleanup 🚨 FIX APPLIED HERE 🚨
+const meaningfulWords = [...coreMeaningfulWords, ...testingKeywords];
+
 const meaninglessRegex = new RegExp(`\\b(?:${meaningfulWords.join('|')})\\b`, 'gi');
 const directionalKeywords = ['near', 'opposite', 'back side', 'front side', 'behind', 'opp'];
 
@@ -101,15 +105,15 @@ function buildGeminiPrompt(originalAddress, postalData) {
     let basePrompt = `You are an expert Indian address verifier and formatter. Your task is to process a raw address, perform a thorough analysis, and provide a comprehensive response in a single JSON object. Provide all responses in English only. Strictly translate all extracted address components to English. Correct all common spelling and phonetic errors in the provided address, such as "rd" to "Road", "nager" to "Nagar", and "nd" to "2nd". Analyze common short forms and phonetic spellings, such as "lean" for "Lane", and use your best judgment to correct them. Be strict about ensuring the output is a valid, single, and complete address for shipping. Use your advanced knowledge to identify and remove any duplicate address components that are present consecutively (e.g., 'Gandhi Street Gandhi Street' should be 'Gandhi Street').
 
 Your response must contain the following keys:
-1.  "H.no.", "Flat No.", "Plot No.", "Room No.", "Building No.", "Block No.", "Ward No.", "Gali No.", "Zone No.": Extract only the number or alphanumeric sequence (e.g., '1-26', 'A/25', '10'). Set to null if not found.
-2.  "Colony", "Street", "Locality", "Building Name", "House Name", "Floor": Extract the name.
-3.  "P.O.": The official Post Office name from the PIN data. Prepend "P.O." to the name. Example: "P.O. Boduppal".
-4.  "Tehsil": The official Tehsil/SubDistrict from the PIN data. Prepend "Tehsil". Example: "Tehsil Pune".
-5.  "DIST.": The official District from the PIN data.
-6.  "State": The official State from the PIN data.
-7.  "PIN": The 6-digit PIN code. Find and verify the correct PIN. If a PIN exists in the raw address but is incorrect, find the correct one and provide it.
-8.  "Landmark": A specific, named landmark (e.g., "Apollo Hospital"), not a generic type like "school". If multiple landmarks are present, list them comma-separated. Extract the landmark without any directional words like 'near', 'opposite', 'behind' etc., as this will be handled by the script.
-9.  "Remaining": A last resort for any text that does not fit into other fields. Clean this by removing meaningless words like 'job', 'raw', 'add-', 'tq', 'dist' and country, state, district, or PIN code.
+1.  "H.no.", "Flat No.", "Plot No.", "Room No.", "Building No.", "Block No.", "Ward No.", "Gali No.", "Zone No.": Extract only the number or alphanumeric sequence (e.g., '1-26', 'A/25', '10'). Set to null if not found.
+2.  "Colony", "Street", "Locality", "Building Name", "House Name", "Floor": Extract the name.
+3.  "P.O.": The official Post Office name from the PIN data. Prepend "P.O." to the name. Example: "P.O. Boduppal".
+4.  "Tehsil": The official Tehsil/SubDistrict from the PIN data. Prepend "Tehsil". Example: "Tehsil Pune".
+5.  "DIST.": The official District from the PIN data.
+6.  "State": The official State from the PIN data.
+7.  "PIN": The 6-digit PIN code. Find and verify the correct PIN. If a PIN exists in the raw address but is incorrect, find the correct one and provide it.
+8.  "Landmark": A specific, named landmark (e.g., "Apollo Hospital"), not a generic type like "school". If multiple landmarks are present, list them comma-separated. Extract the landmark without any directional words like 'near', 'opposite', 'behind' etc., as this will be handled by the script.
+9.  "Remaining": A last resort for any text that does not fit into other fields. Clean this by removing meaningless words like 'job', 'raw', 'add-', 'tq', 'dist' and country, state, district, or PIN code.
 10. "FormattedAddress": This is the most important field. Based on your full analysis, create a single, clean, human-readable, and comprehensive shipping-ready address string. It should contain all specific details (H.no., Room No., etc.), followed by locality, street, colony, P.O., Tehsil, and District. DO NOT include the State or PIN in this string. Use commas to separate logical components. Do not invent or "hallucinate" information.
 11. "LocationType": Identify the type of location (e.g., "Village", "Town", "City", "Urban Area").
 12. "AddressQuality": Analyze the address completeness and clarity for shipping. Categorize it as one of the following: Very Good, Good, Medium, Bad, or Very Bad.
