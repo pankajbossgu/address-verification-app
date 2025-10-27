@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bulk Address Verification</title>
+    <title>Single Address Verification</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -11,11 +11,11 @@
             theme: {
                 extend: {
                     colors: {
-                        'primary-blue': '#1D4ED8',
-                        'secondary-green': '#059669',
+                        'primary-blue': '#1D4ED8', // Dark Blue
+                        'secondary-green': '#059669', // Dark Green
                         'neutral-gray': '#E5E7EB',
-                        'template-blue': '#DBEAFE',
-                        'template-dark': '#1E40AF',
+                        'success-light': '#D1FAE5',
+                        'success-dark': '#065F46',
                     },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
@@ -29,264 +29,186 @@
     </style>
 </head>
 <body class="bg-neutral-gray min-h-screen flex items-center justify-center p-4">
-    <div class="w-full max-w-3xl bg-white p-8 sm:p-10 rounded-xl shadow-2xl">
+    <div class="w-full max-w-2xl bg-white p-8 sm:p-10 rounded-xl shadow-2xl">
 
-        <!-- Back Link pointing to root (/) -->
-        <a href="/" class="text-primary-blue hover:text-blue-700 font-medium mb-6 inline-flex items-center transition duration-150">
+        <!-- Back Link pointing to index.html for correct relative navigation -->
+        <a href="index.html" class="text-primary-blue hover:text-blue-700 font-medium mb-6 inline-flex items-center transition duration-150">
             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
             Back to Home
         </a>
 
         <header class="text-center mb-8">
             <h1 class="text-3xl font-extrabold text-gray-900 mb-2">
-                <span class="text-secondary-green">Bulk Address</span> Verification
+                <span class="text-primary-blue">Single Address</span> Verification
             </h1>
-            <p class="text-gray-500">Upload a CSV file to process and standardize multiple addresses at once.</p>
+            <p class="text-gray-500">Enter a single address and name for real-time cleaning and validation.</p>
         </header>
-
-        <div class="space-y-8">
-            <!-- Step 1: Download Template -->
-            <div class="p-6 bg-template-blue rounded-lg border border-blue-300 shadow-md">
-                <h3 class="text-xl font-bold text-template-dark mb-3 flex items-center">
-                    <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                    Step 1: Download Template
-                </h3>
-                <p class="text-gray-700 mb-4">Click the button below to get the required CSV template. Your file must have these columns: **ORDER ID, CUSTOMER NAME, CUSTOMER RAW ADDRESS**.</p>
-                <button id="downloadTemplateButton" class="px-6 py-3 bg-template-dark text-white font-bold rounded-lg hover:bg-blue-900 transition duration-200 shadow-lg focus:outline-none focus:ring-4 focus:ring-template-dark focus:ring-opacity-50">
-                    Download Template (CSV)
-                </button>
+        
+        <div class="space-y-6">
+            <!-- Customer Name Input -->
+            <div>
+                <label for="customerName" class="block text-sm font-medium text-gray-700 mb-1">Customer Name (Optional)</label>
+                <input type="text" id="customerName" placeholder="e.g., Pankaj Bossgu" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue transition duration-150">
             </div>
 
-            <!-- Step 2: Upload and Process -->
-            <div class="p-6 border-2 border-dashed border-gray-300 rounded-lg bg-white shadow-md">
-                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                    <svg class="w-6 h-6 mr-2 text-secondary-green" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.888-7.903A5 5 0 1115.903 8.35L16 8a5 5 0 014 4v2m-6 3a4 4 0 01-4-4"></path></svg>
-                    Step 2: Upload File
-                </h3>
-                
-                <div class="text-center mb-6">
-                    <input type="file" id="csvFileInput" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-blue/10 file:text-primary-blue hover:file:bg-primary-blue/20 transition duration-150">
-                    <p class="text-xs text-gray-400 mt-2">Max 1000 rows recommended for stability.</p>
-                </div>
-                
-                <button id="processButton" class="w-full py-3 bg-secondary-green text-white font-bold rounded-lg shadow-xl hover:bg-green-700 transition duration-200 transform hover:scale-[1.00] focus:outline-none focus:ring-4 focus:ring-secondary-green focus:ring-opacity-50" disabled>
-                    Start Verification
-                </button>
+            <!-- Raw Address Input -->
+            <div>
+                <label for="rawAddress" class="block text-sm font-medium text-gray-700 mb-1">Raw Address to Verify</label>
+                <textarea id="rawAddress" rows="4" placeholder="e.g., H.No. 123, Sector 40B, near bus stand, Chandigarh" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue resize-none transition duration-150"></textarea>
             </div>
 
-            <!-- Step 3: Status and Download -->
-            <div class="pt-4">
-                <h3 class="text-xl font-bold text-gray-800 mb-4">Verification Status</h3>
-                
-                <p id="status-message" class="text-gray-600 mb-3 font-medium">Ready to upload.</p>
-                
-                <div class="w-full h-4 bg-gray-200 rounded-full overflow-hidden shadow-inner mb-4">
-                    <div class="h-full bg-primary-blue transition-all duration-300 ease-out" id="progressBarFill" style="width: 0%"></div>
-                </div>
+            <!-- Verification Button -->
+            <button id="verifyButton" class="w-full py-3 bg-secondary-green text-white font-bold rounded-lg shadow-md hover:bg-green-700 transition duration-200 transform hover:scale-[1.01] focus:outline-none focus:ring-4 focus:ring-secondary-green focus:ring-opacity-50">
+                Verify Address
+            </button>
+            
+            <!-- Loading Message -->
+            <div id="loading-message" class="hidden text-center text-primary-blue font-semibold py-3 border border-blue-200 bg-blue-50 rounded-lg">
+                Processing... Please wait a few seconds while Gemini processes your request.
+            </div>
+        </div>
 
-                <a id="downloadLink" class="hidden w-full text-center py-3 bg-primary-blue text-white font-bold rounded-lg shadow-xl hover:bg-blue-800 transition duration-200 focus:outline-none focus:ring-4 focus:ring-primary-blue focus:ring-opacity-50 cursor-pointer">
-                    Download Verified Addresses (CSV)
-                </a>
+        <!-- Results Container -->
+        <div id="resultsContainer" class="hidden mt-10">
+            <h3 class="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">Verification Results</h3>
+            <div class="space-y-4">
+                <div class="result-block bg-success-light p-4 rounded-lg border border-green-300 shadow-sm">
+                    <strong class="text-success-dark block mb-1">Clean Name:</strong> 
+                    <span id="out-name" class="text-gray-700"></span>
+                </div>
+                <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                    <strong class="text-gray-600 block mb-1">Clean Address Line 1:</strong> 
+                    <span id="out-address" class="text-gray-800 font-medium"></span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                        <strong class="text-gray-600 block mb-1">District:</strong> 
+                        <span id="out-district" class="text-gray-800"></span>
+                    </div>
+                    <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                        <strong class="text-gray-600 block mb-1">State:</strong> 
+                        <span id="out-state" class="text-gray-800"></span>
+                    </div>
+                    <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                        <strong class="text-gray-600 block mb-1">PIN:</strong> 
+                        <span id="out-pin" class="text-gray-800 font-bold"></span>
+                    </div>
+                    <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                        <strong class="text-gray-600 block mb-1">Quality:</strong> 
+                        <span id="out-quality" class="text-gray-800"></span>
+                    </div>
+                </div>
+                <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                    <strong class="text-gray-600 block mb-1">Remarks:</strong> 
+                    <span id="out-remarks" class="text-gray-800 italic"></span>
+                </div>
             </div>
         </div>
     </div>
     
-    <!-- JavaScript logic for bulk processing -->
+    <!-- JavaScript logic from public/script.js needs to be inline here -->
     <script>
         const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
 
         document.addEventListener('DOMContentLoaded', () => {
-            const downloadTemplateButton = document.getElementById('downloadTemplateButton');
-            const csvFileInput = document.getElementById('csvFileInput');
-            const processButton = document.getElementById('processButton');
-
-            if (downloadTemplateButton) {
-                downloadTemplateButton.addEventListener('click', handleTemplateDownload);
-            }
-
-            if (csvFileInput) {
-                csvFileInput.addEventListener('change', () => {
-                    if (processButton) {
-                        processButton.disabled = !csvFileInput.files.length;
-                        document.getElementById('status-message').textContent = csvFileInput.files.length ? `File selected: ${csvFileInput.files[0].name}. Ready to start.` : 'Ready to upload.';
-                        document.getElementById('downloadLink').classList.add('hidden');
-                        document.getElementById('progressBarFill').style.width = '0%';
-                    }
-                });
-            }
-
-            if (processButton) {
-                processButton.addEventListener('click', handleBulkVerification);
+            const verifyButton = document.getElementById('verifyButton');
+            if (verifyButton) {
+                verifyButton.addEventListener('click', handleSingleVerification);
             }
         });
 
-        // --- Core Utility Functions ---
-
-        function parseCSV(csvText) {
-            const lines = csvText.split('\\n').filter(line => line.trim() !== '');
-            if (lines.length === 0) return [];
-            
-            // Simple parsing assuming no complex quoting for now, expecting headers: ORDER ID, CUSTOMER NAME, CUSTOMER RAW ADDRESS
-            const data = [];
-            for (let i = 1; i < lines.length; i++) {
-                const values = lines[i].split(',').map(v => v.trim().replace(/^\"|\"$/g, ''));
-                if (values.length >= 3) {
-                    data.push({
-                        orderId: values[0],
-                        customerName: values[1],
-                        rawAddress: values[2]
-                    });
+        function showMessage(elementId, text, isError = false) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.textContent = text;
+                if (isError) {
+                    element.classList.remove('bg-blue-50', 'text-primary-blue');
+                    element.classList.add('bg-red-50', 'text-red-700');
+                } else {
+                    element.classList.remove('bg-red-50', 'text-red-700');
+                    element.classList.add('bg-blue-50', 'text-primary-blue');
                 }
             }
-            return data;
-        }
-
-        function createAndDownloadCSV(rows, filename) {
-            const header = "ORDER ID,CUSTOMER NAME (Original),CUSTOMER RAW ADDRESS (Original),CLEAN NAME,CLEAN ADDRESS LINE 1,LANDMARK,STATE,DISTRICT,PIN,REMARKS,ADDRESS QUALITY";
-            const csvContent = [header, ...rows].join('\\n');
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            
-            const downloadLink = document.getElementById('downloadLink');
-            downloadLink.href = url;
-            downloadLink.download = filename;
-            downloadLink.classList.remove('hidden');
-            downloadLink.textContent = 'Download Verified Addresses (CSV)';
         }
 
         async function fetchVerification(rawAddress, customerName) {
             const payload = { rawAddress, customerName };
             try {
-                // Exponential backoff mechanism (1s, 2s, 4s retry delays)
-                for (let i = 0; i < 3; i++) {
-                    const response = await fetch(API_ENDPOINT, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-
-                    if (response.status === 429) { // Too Many Requests
-                        console.warn(`Rate limit hit. Retrying in ${Math.pow(2, i)} seconds...`);
-                        await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
-                        continue;
-                    }
-                    
-                    if (!response.ok) {
-                        const errorBody = await response.json();
-                        throw new Error(errorBody.error || `Server responded with status ${response.status}`);
-                    }
-                    
-                    return await response.json();
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    const errorBody = await response.json();
+                    throw new Error(errorBody.error || `Server responded with status ${response.status}`);
                 }
-                throw new Error("Verification failed after multiple retries.");
+                
+                return await response.json();
+
             } catch (error) {
                 console.error("Verification API Error:", error);
+                // Return a structured error response
                 return { 
                     status: "Error", 
                     error: `Verification failed: ${error.message}`,
-                    remarks: `ERROR: ${error.message}`
+                    remarks: `Error during verification: ${error.message}`
                 };
             }
         }
 
-        // --- Handlers ---
+        async function handleSingleVerification() {
+            const rawAddress = document.getElementById('rawAddress').value;
+            const customerName = document.getElementById('customerName').value;
+            const loadingMessage = document.getElementById('loading-message');
+            const resultsContainer = document.getElementById('resultsContainer');
+            const verifyButton = document.getElementById('verifyButton');
 
-        function handleTemplateDownload() {
-            const template = "ORDER ID,CUSTOMER NAME,CUSTOMER RAW ADDRESS\\n1001,John Doe,H.No. 123, Sector 40B, Chandigarh\\n1002,Jane Smith,Near Police Station, Dadumajra, Chandigarh";
-            const blob = new Blob([template], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'address_template.csv';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-
-        async function handleBulkVerification() {
-            const fileInput = document.getElementById('csvFileInput');
-            const processButton = document.getElementById('processButton');
-            const progressBarFill = document.getElementById('progressBarFill');
-            const statusMessage = document.getElementById('status-message');
-            const downloadLink = document.getElementById('downloadLink');
-
-            if (!fileInput.files.length) {
-                statusMessage.textContent = 'Please select a CSV file first.';
+            if (rawAddress.trim() === "") {
+                showMessage('loading-message', 'Please enter a raw address to verify.', true);
+                loadingMessage.classList.remove('hidden');
+                resultsContainer.classList.add('hidden');
                 return;
             }
 
-            const file = fileInput.files[0];
-            processButton.disabled = true;
-            fileInput.disabled = true;
-            downloadLink.classList.add('hidden');
-            progressBarFill.style.width = '0%';
-            statusMessage.textContent = 'Reading file...';
+            // Show loading state
+            loadingMessage.classList.remove('hidden');
+            resultsContainer.classList.add('hidden');
+            verifyButton.disabled = true;
+            verifyButton.textContent = 'Verifying...';
 
-            const reader = new FileReader();
+            try {
+                showMessage('loading-message', 'Processing... Please wait a few seconds while Gemini processes your request.');
 
-            reader.onload = async function(e) {
-                const csvText = e.target.result;
-                const addresses = parseCSV(csvText);
-                const totalAddresses = addresses.length;
-                let processedCount = 0;
-                const outputRows = [];
+                const verificationResult = await fetchVerification(rawAddress, customerName);
 
-                if (totalAddresses === 0) {
-                    statusMessage.textContent = 'Error: The file is empty or missing required data.';
-                    processButton.disabled = false;
-                    fileInput.disabled = false;
+                if (verificationResult.status === "Error") {
+                     // Display the error clearly
+                    showMessage('loading-message', `Verification Error: ${verificationResult.error || 'Unknown Error'}`, true);
                     return;
                 }
+
+                // Populate results
+                document.getElementById('out-name').textContent = verificationResult.customerCleanName || 'N/A';
+                document.getElementById('out-address').textContent = verificationResult.addressLine1 || 'N/A';
+                // Note: I'm omitting Landmark and Tehsil in this basic UI to keep it clean, but they are in the full API response.
+                document.getElementById('out-district').textContent = verificationResult.district || 'N/A';
+                document.getElementById('out-state').textContent = verificationResult.state || 'N/A';
+                document.getElementById('out-pin').textContent = verificationResult.pin || 'N/A';
+                document.getElementById('out-quality').textContent = verificationResult.addressQuality || 'N/A';
+                document.getElementById('out-remarks').textContent = verificationResult.remarks || 'No specific remarks.';
+
+                // Show results
+                resultsContainer.classList.remove('hidden');
+                loadingMessage.classList.add('hidden');
                 
-                // Process addresses sequentially to manage rate limits and ensure proper progress
-                for (const addr of addresses) {
-                    let verificationResult;
-                    
-                    // Simple check for obvious errors to skip API call if data is severely malformed
-                    if (!addr.rawAddress || !addr.orderId) {
-                        verificationResult = { status: "Error", remarks: "Skipped: Missing Order ID or Raw Address." };
-                    } else {
-                        verificationResult = await fetchVerification(addr.rawAddress, addr.customerName);
-                    }
-
-                    // Format the output row for the new CSV
-                    const outputRow = [
-                        addr.orderId,
-                        addr.customerName,
-                        addr.rawAddress,
-                        verificationResult.customerCleanName || '',
-                        verificationResult.addressLine1 || '',
-                        verificationResult.landmark || '', // Landmark is expected in the full API response
-                        verificationResult.state || '',
-                        verificationResult.district || '',
-                        verificationResult.pin || '',
-                        verificationResult.remarks || verificationResult.error || '',
-                        verificationResult.addressQuality || ''
-                    ].map(cell => `\"${String(cell).replace(/\"/g, '\"\"')}\"`).join(','); // Escape quotes and wrap in quotes
-
-                    outputRows.push(outputRow);
-                    
-                    processedCount++;
-                    const progress = (processedCount / totalAddresses) * 100;
-                    progressBarFill.style.width = `${progress}%`;
-                    statusMessage.textContent = `Processing... ${processedCount} of ${totalAddresses} addresses completed.`;
-                }
-
-                statusMessage.textContent = `Processing complete! ${totalAddresses} addresses verified. Ready to download.`;
-                createAndDownloadCSV(outputRows, "verified_addresses.csv");
-                processButton.disabled = false;
-                fileInput.disabled = false;
-            };
-
-            reader.onerror = function() {
-                statusMessage.textContent = "Error reading file. Please try again.";
-                processButton.disabled = false;
-                fileInput.disabled = false;
-            };
-
-            reader.readAsText(file);
+            } catch (e) {
+                showMessage('loading-message', `An unexpected error occurred: ${e.message}`, true);
+            } finally {
+                verifyButton.disabled = false;
+                verifyButton.textContent = 'Verify Address';
+            }
         }
     </script>
 </body>
