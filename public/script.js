@@ -1,3 +1,5 @@
+// public/script.js
+
 const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -236,7 +238,7 @@ async function handleBulkVerification() {
             const row = lines[i].split(',');
             const orderId = row[0] || 'N/A';
             const customerName = row[1] || '';
-            const rawAddress = row[2] || ''; 
+            const rawAddress = row[2] || '';
             
             let verificationResult;
             
