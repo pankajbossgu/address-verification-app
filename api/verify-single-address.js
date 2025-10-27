@@ -16,6 +16,25 @@ const meaningfulWords = [
 const meaninglessRegex = new RegExp(`\\b(?:${meaningfulWords.join('|')})\\b`, 'gi');
 const directionalKeywords = ['near', 'opposite', 'back side', 'front side', 'behind', 'opp'];
 
+function removeAdjacentDuplicates(str) {
+    if (!str || typeof str !== 'string' || str.trim() === '') {
+        return '';
+    }
+    
+    const words = str.trim().split(/\s+/).filter(w => w.length > 0);
+    const cleanedWords = [];
+
+    for (let i = 0; i < words.length; i++) {
+        const currentWord = words[i];
+        const lastCleanedWord = cleanedWords[cleanedWords.length - 1];
+
+        if (!lastCleanedWord || currentWord.toLowerCase() !== lastCleanedWord.toLowerCase()) {
+            cleanedWords.push(currentWord);
+        }
+    }
+
+    return cleanedWords.join(' ').replace(/\s+(null|not found)\s*/gi, ' ').trim();
+}
 
 async function getIndiaPostData(pin) {
     if (pincodeCache[pin]) return pincodeCache[pin];
@@ -48,7 +67,6 @@ async function getIndiaPostData(pin) {
         return pincodeCache[pin];
     }
 }
-
 
 async function getGeminiResponse(prompt) {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -124,7 +142,6 @@ Raw Address: "${originalAddress}"
         basePrompt += `\nAddress has no PIN or the PIN is invalid. You must find and verify the correct 6-digit PIN. If you cannot find a valid PIN, set "PIN" to null and provide the best available data.`;
     }
     
-    // Add the JSON output instruction
     basePrompt += `\nYour entire response MUST be a single, valid JSON object starting with { and ending with } and contain ONLY the keys listed above.`;
 
     return basePrompt;
@@ -138,7 +155,7 @@ function processAddress(address, postalData) {
 // --- 2. MAIN HANDLER ---
 
 module.exports = async (req, res) => {
-    // START OF CORS FIX (Step 36)
+    // START OF CORS FIX
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', 'https://pankajbossgu.github.io');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -189,8 +206,16 @@ module.exports = async (req, res) => {
 
         // 3. Final cleanup and formatting
         
+        // ** Apply Cleanup to primary address fields **
+        if (parsedData.FormattedAddress) {
+            parsedData.FormattedAddress = removeAdjacentDuplicates(parsedData.FormattedAddress);
+        }
+        if (parsedData.Landmark) {
+            parsedData.Landmark = removeAdjacentDuplicates(parsedData.Landmark);
+        }
+        
         // Extract and verify PIN again from parsed data
-        const finalPin = String(parsedData.PIN).match(/\b\d{6}\b/) ? parsedData.PIN : initialPin;
+        const finalPin = String(parsedData.PIN || '').match(/\b\d{6}\b/) ? parsedData.PIN : initialPin;
 
         // Re-run India Post lookup if Gemini suggested a different PIN or if initial lookup failed
         if (finalPin && finalPin !== initialPin) {
