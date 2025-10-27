@@ -4,82 +4,42 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bulk Address Verification</title>
-    <!-- Load Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'primary-blue': '#1e40af',
-                        'primary-green': '#10b981',
-                        'secondary-yellow': '#f59e0b',
-                    }
-                }
-            }
-        }
-    </script>
+    <style>
+        .upload-section { margin-top: 20px; border: 2px dashed #ccc; padding: 30px; border-radius: 8px; text-align: center; }
+        .upload-section input { display: block; margin: 15px auto; }
+        .progress-container { margin-top: 30px; text-align: left; }
+        .progress-bar { width: 100%; height: 20px; background-color: #e9ecef; border-radius: 5px; overflow: hidden; margin-top: 10px; }
+        .progress-fill { height: 100%; width: 0%; background-color: #28a745; transition: width 0.3s; }
+        #downloadLink { display: none; margin-top: 20px; }
+        #status-message { font-weight: bold; margin-bottom: 15px; }
+    </style>
 </head>
-<body class="bg-gray-50 p-4 md:p-8 min-h-screen">
+<body>
+    <div class="container">
+        <a href="index.html" class="button back-button" style="display: block; margin-bottom: 20px; width: fit-content; margin-left: auto; margin-right: auto;">← Back to Home</a>
+        <h2>Bulk Address Verification</h2>
+        
+        <p>1. Download the template file to see the required column structure:</p>
+        <button id="downloadTemplateButton" class="button secondary">Download Template (CSV)</button>
 
-    <div class="w-full max-w-4xl mx-auto bg-white p-6 md:p-10 rounded-xl shadow-2xl">
-        
-        <!-- Header and Back Button -->
-        <a href="index.html" class="text-primary-blue hover:text-blue-700 transition duration-150 mb-6 inline-block font-medium">
-            ← Back to Home
-        </a>
-        <h1 class="text-4xl font-bold text-gray-800 mb-2">Bulk Address Verification</h1>
-        <p class="text-gray-500 mb-8">Process multiple addresses efficiently using a CSV file.</p>
-        
-        <!-- Template Download Section -->
-        <div class="mb-8 border-b pb-6 border-gray-100">
-            <h3 class="text-xl font-semibold text-gray-700 mb-3">1. Prepare Your Data</h3>
-            <p class="text-sm text-gray-600 mb-4">
-                <svg class="w-4 h-4 inline-block mr-1 text-primary-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                Template Columns: <span class="font-mono bg-gray-100 p-1 rounded text-xs">ORDER ID, CUSTOMER NAME, CUSTOMER RAW ADDRESS</span>
-            </p>
-            <button id="downloadTemplateButton" class="py-2 px-4 text-sm font-medium text-white bg-primary-blue rounded-lg hover:bg-blue-700 transition duration-150 shadow-md">
-                <svg class="w-4 h-4 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                Download Template (CSV)
-            </button>
+        <div class="upload-section">
+            <p>2. Upload your CSV file (Max 1000 rows recommended):</p>
+            <input type="file" id="csvFileInput" accept=".csv" disabled>
+            <p class="note">Columns required: ORDER ID, CUSTOMER NAME, CUSTOMER RAW ADDRESS</p>
+            <button id="processButton" class="button primary" disabled>Start Verification</button>
         </div>
 
-        <!-- Upload and Process Section -->
-        <div class="upload-section bg-gray-50 border-2 border-dashed border-gray-300 p-8 rounded-xl mb-8">
-            <h3 class="text-xl font-semibold text-gray-700 mb-3">2. Upload & Start Verification</h3>
-            
-            <p class="text-gray-500 mb-4">Upload your CSV file (Max 1000 rows recommended):</p>
-            <!-- CRITICAL ID: csvFileInput -->
-            <input type="file" id="csvFileInput" accept=".csv" class="w-full md:w-2/3 mx-auto text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-white file:py-2 file:px-4 file:border-0 file:bg-gray-200 file:text-sm file:font-medium hover:file:bg-gray-300 mb-6">
-            
-            <!-- CRITICAL ID: processButton -->
-            <button id="processButton" class="w-full md:w-1/2 py-3 text-lg font-semibold text-white bg-secondary-yellow rounded-lg shadow-md hover:bg-yellow-600 transition duration-150 disabled:opacity-50" disabled>
-                Start Verification
-            </button>
-        </div>
-
-        <!-- Status and Download Section -->
-        <div class="progress-container border-t pt-6 border-gray-100">
-            <h3 class="text-xl font-semibold text-gray-700 mb-4">Verification Status</h3>
-            
-            <!-- CRITICAL ID: status-message -->
-            <p id="status-message" class="text-gray-600 mb-4 font-medium">Ready to upload.</p>
-            
-            <div class="w-full bg-gray-200 rounded-full h-4 mb-6">
-                <!-- CRITICAL ID: progressBarFill -->
-                <div id="progressBarFill" class="bg-primary-green h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
+        <div class="progress-container">
+            <h3>Verification Status</h3>
+            <p id="status-message">Ready to upload.</p>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressBarFill"></div>
             </div>
-            
-            <!-- CRITICAL ID: downloadLink -->
-            <a id="downloadLink" href="#" class="inline-flex items-center py-2 px-4 text-lg font-medium text-white bg-primary-green rounded-lg shadow-md hover:bg-green-600 transition duration-150" style="display:none;">
-                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                Download Verified CSV
-            </a>
+            <a id="downloadLink" class="button primary">Download Verified CSV</a>
         </div>
     </div>
 
-    <!-- CRITICAL SCRIPT LINK -->
     <script src="script.js"></script>
 </body>
 </html>
