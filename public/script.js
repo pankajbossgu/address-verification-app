@@ -1,285 +1,66 @@
-const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
-
-document.addEventListener('DOMContentLoaded', () => {
-    const verifyButton = document.getElementById('verifyButton');
-    if (verifyButton) {
-        verifyButton.addEventListener('click', handleSingleVerification);
-    }
-    
-    const downloadTemplateButton = document.getElementById('downloadTemplateButton');
-    const csvFileInput = document.getElementById('csvFileInput');
-    const processButton = document.getElementById('processButton');
-
-    if (downloadTemplateButton) {
-        downloadTemplateButton.addEventListener('click', handleTemplateDownload);
-        if (csvFileInput) csvFileInput.disabled = false;
-    }
-
-    if (csvFileInput) {
-        csvFileInput.addEventListener('change', () => {
-            if (processButton) {
-                processButton.disabled = !csvFileInput.files.length;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Address Verification</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+    <script>
+        // Use the same color scheme defined in bulk.html
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary-blue': '#1e40af',
+                        'primary-green': '#10b981',
+                        'secondary-yellow': '#f59e0b',
+                    }
+                }
             }
-        });
-    }
-
-    if (processButton) {
-        processButton.addEventListener('click', handleBulkVerification);
-    }
-});
-
-async function handleSingleVerification() {
-    const rawAddress = document.getElementById('rawAddress').value;
-    const customerName = document.getElementById('customerName').value;
-    const loadingMessage = document.getElementById('loading-message');
-    const resultsContainer = document.getElementById('resultsContainer');
-
-    if (rawAddress.trim() === "") {
-        alert("Please enter a raw address to verify.");
-        return;
-    }
-
-    document.getElementById('verifyButton').disabled = true;
-    loadingMessage.style.display = 'block';
-    resultsContainer.style.display = 'none';
-
-    try {
-        // Single verification uses the same core logic as the bulk fetch helper
-        const result = await fetchVerification(rawAddress, customerName);
-
-        if (result.status === "Success") {
-            displayResults(result);
-        } else {
-            // Display alert only if it's not a generic network/timeout error
-            if (!result.remarks.includes("Network/Timeout Error")) {
-                alert(`Verification Failed: ${result.error || result.remarks || "Unknown error."}`);
-            } else {
-                 alert("Verification Failed: Vercel backend may have crashed or timed out (504). Please try again or check Vercel logs.");
-            }
-            displayErrorResult(result);
         }
+    </script>
+</head>
+<body class="bg-gray-50 p-4 md:p-8 min-h-screen flex items-center justify-center">
 
-    } catch (e) {
-        console.error("Fetch Error:", e);
-        alert("A network error occurred. Check the console for details. (Possible Vercel CORS/Domain issue)");
-    } finally {
-        document.getElementById('verifyButton').disabled = false;
-        loadingMessage.style.display = 'none';
-        resultsContainer.style.display = 'block';
-    }
-}
-
-function displayResults(data) {
-    document.getElementById('out-name').textContent = data.customerCleanName || 'N/A';
-    document.getElementById('out-address').textContent = data.addressLine1 || 'N/A';
-    document.getElementById('out-landmark').textContent = data.landmark || 'N/A';
-    document.getElementById('out-state').textContent = data.state || 'N/A';
-    document.getElementById('out-district').textContent = data.district || 'N/A';
-    document.getElementById('out-pin').textContent = data.pin || 'N/A';
-    document.getElementById('out-remarks').textContent = data.remarks || 'No issues found.';
-    document.getElementById('out-quality').textContent = data.addressQuality || 'N/A';
-}
-
-function displayErrorResult(data) {
-    document.getElementById('out-name').textContent = data.customerCleanName || '---';
-    document.getElementById('out-address').textContent = data.addressLine1 || 'API ERROR';
-    document.getElementById('out-landmark').textContent = '---';
-    document.getElementById('out-state').textContent = data.state || '---';
-    document.getElementById('out-district').textContent = data.district || '---';
-    document.getElementById('out-pin').textContent = data.pin || '---';
-    document.getElementById('out-remarks').textContent = data.remarks || data.error || 'Verification failed.';
-    document.getElementById('out-quality').textContent = 'BAD';
-}
-
-function handleTemplateDownload() {
-    const templateData = "ORDER ID,CUSTOMER NAME,CUSTOMER RAW ADDRESS\n";
-    const blob = new Blob([templateData], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'address_template.csv');
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-// ** CRITICAL: This function is used for both Single and Bulk verification **
-async function fetchVerification(address, name) {
-    try {
-        const response = await fetch(API_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ address: address, customerName: name })
-        });
+    <div class="w-full max-w-lg mx-auto bg-white p-8 md:p-12 rounded-xl shadow-2xl text-center">
         
-        let result = {};
-        let rawResponseText = "";
-        try {
-            rawResponseText = await response.text();
-            result = JSON.parse(rawResponseText);
-        } catch (e) {
-            console.error("Non-JSON API response. Status:", response.status, "Raw Text:", rawResponseText);
-            return {
-                status: "Error",
-                customerCleanName: name,
-                addressLine1: "Server Error",
-                remarks: `API Failed: Server returned non-JSON error or timed out (${response.status}).`,
-                addressQuality: "VERY BAD"
-            };
-        }
-
+        <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800 mb-4">
+            AI Address Verification
+        </h1>
+        <p class="text-lg text-gray-600 mb-10">
+            Choose a method to clean, standardize, and verify your Indian addresses.
+        </p>
         
-        if (response.ok && result.status === "Success") {
-            return result;
-        } else {
-            return {
-                status: "Error",
-                customerCleanName: name,
-                addressLine1: "API Error",
-                landmark: "",
-                state: "",
-                district: "",
-                pin: "",
-                remarks: `API Failed: ${result.error || result.remarks || 'Unknown Server Error.'}`,
-                addressQuality: "BAD"
-            };
-        }
-    } catch (e) {
-        console.error("Fetch Error (Network):", e);
-        return {
-            status: "Error",
-            customerCleanName: name,
-            addressLine1: "Network/Timeout Error",
-            landmark: "",
-            state: "",
-            district: "",
-            pin: "",
-            remarks: "Network or timeout error during API call. The Vercel function may be timing out (504).",
-            addressQuality: "VERY BAD"
-        };
-    }
-}
-
-function createAndDownloadCSV(dataArray, filename) {
-    const csvContent = dataArray.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    
-    const downloadLink = document.getElementById('downloadLink');
-    downloadLink.setAttribute('href', url);
-    downloadLink.setAttribute('download', filename);
-    downloadLink.style.display = 'block';
-}
-
-async function handleBulkVerification() {
-    const fileInput = document.getElementById('csvFileInput');
-    const file = fileInput.files[0];
-    if (!file) {
-        alert("Please select a CSV file.");
-        return;
-    }
-
-    const processButton = document.getElementById('processButton');
-    const statusMessage = document.getElementById('status-message');
-    const progressBarFill = document.getElementById('progressBarFill');
-    const downloadLink = document.getElementById('downloadLink');
-
-    processButton.disabled = true;
-    fileInput.disabled = true;
-    downloadLink.style.display = 'none';
-    progressBarFill.style.width = '0%';
-    statusMessage.textContent = "Parsing CSV...";
-
-    const reader = new FileReader();
-    reader.onload = async function(event) {
-        const text = event.target.result;
-        let lines = text.split('\n').filter(line => line.trim() !== '');
-
-        if (lines.length <= 1) {
-            alert("CSV file is empty or contains only headers.");
-            processButton.disabled = false;
-            fileInput.disabled = false;
-            return;
-        }
-
-        // Simple check to ensure we have enough columns, not strict header validation
-        const totalAddresses = lines.length - 1;
-        if (totalAddresses === 0) {
-            alert("No data rows found after headers.");
-            processButton.disabled = false;
-            fileInput.disabled = false;
-            return;
-        }
-
-        const outputData = [
-            "ORDER ID", "CUSTOMER NAME", "RAW ADDRESS", 
-            "CLEAN NAME", "ADDRESS LINE 1", "LANDMARK", 
-            "STATE", "DISTRICT", "PIN", "REMARK", "ADDRESS QUALITY"
-        ].join(',');
-        let processedCount = 0;
+        <div class="flex flex-col space-y-4">
+            <!-- Single Address Link -->
+            <a href="single.html" class="flex items-center justify-center py-4 px-6 text-xl font-bold text-white bg-primary-blue rounded-lg shadow-lg hover:bg-blue-700 transition duration-150 transform hover:scale-[1.02]">
+                <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                Verify Single Address
+            </a>
+            <!-- Bulk Address Link -->
+            <a href="bulk.html" class="flex items-center justify-center py-4 px-6 text-xl font-bold text-gray-800 bg-secondary-yellow rounded-lg shadow-lg hover:bg-yellow-600 transition duration-150 transform hover:scale-[1.02]">
+                <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
+                Bulk Address Verification
+            </a>
+        </div>
         
-        const outputRows = [outputData];
+        <p class="mt-10 text-sm text-gray-400">
+            Powered by Gemini, India Post API, and Vercel.
+        </p>
+    </div>
 
-        for (let i = 1; i < lines.length; i++) {
-            const row = lines[i].split(',');
-            // Assuming strict CSV format for simplicity based on template
-            const orderId = row[0] || 'N/A';
-            const customerName = row[1] || '';
-            const rawAddress = row[2] || ''; 
-            
-            let verificationResult;
-            
-            if (rawAddress.trim() === "") {
-                verificationResult = {
-                    status: "Skipped",
-                    customerCleanName: customerName,
-                    addressLine1: "",
-                    landmark: "",
-                    state: "",
-                    district: "",
-                    pin: "",
-                    remarks: "Skipped: Address is empty.",
-                    addressQuality: "BAD"
-                };
-            } else {
-                verificationResult = await fetchVerification(rawAddress, customerName);
-            }
+    <!-- Custom Modal Structure (Used by script.js) -->
+    <div id="customModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-50 transition-opacity duration-300">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm transform scale-95 transition-transform duration-300">
+            <h3 id="modalTitle" class="text-xl font-semibold mb-3 text-gray-800"></h3>
+            <p id="modalMessage" class="text-gray-600 mb-6"></p>
+            <button id="modalCloseButton" class="w-full py-2 bg-primary-blue text-white font-medium rounded-md hover:bg-blue-700 transition duration-150">
+                OK
+            </button>
+        </div>
+    </div>
 
-            const outputRow = [
-                orderId,
-                customerName,
-                rawAddress,
-                verificationResult.customerCleanName || '',
-                verificationResult.addressLine1 || '',
-                verificationResult.landmark || '',
-                verificationResult.state || '',
-                verificationResult.district || '',
-                verificationResult.pin || '',
-                verificationResult.remarks || '',
-                verificationResult.addressQuality || ''
-            ].map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',');
-
-            outputRows.push(outputRow);
-            
-            processedCount++;
-            const progress = (processedCount / totalAddresses) * 100;
-            progressBarFill.style.width = `${progress}%`;
-            statusMessage.textContent = `Processing... ${processedCount} of ${totalAddresses} addresses completed.`;
-        }
-
-        statusMessage.textContent = `Processing complete! ${totalAddresses} addresses verified.`;
-        createAndDownloadCSV(outputRows, "verified_addresses.csv");
-        processButton.disabled = false;
-        fileInput.disabled = false;
-    };
-
-    reader.onerror = function() {
-        alert("Error reading file.");
-        processButton.disabled = false;
-        fileInput.disabled = false;
-    };
-
-    reader.readAsText(file);
-}
+</body>
+</html>
