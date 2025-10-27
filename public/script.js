@@ -1,6 +1,6 @@
 // Global script file for frontend interactions.
 
-// IMPORTANT: Replace this placeholder with your actual Vercel API domain!
+// 🚨 IMPORTANT: THIS MUST MATCH YOUR LIVE VERCEL DOMAIN 🚨
 const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -17,13 +17,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (downloadTemplateButton) {
         downloadTemplateButton.addEventListener('click', handleTemplateDownload);
-        // Enable input after the template button is ready
         if (csvFileInput) csvFileInput.disabled = false;
     }
 
     if (csvFileInput) {
         csvFileInput.addEventListener('change', () => {
-            // Enable process button only if a file is selected
             if (processButton) {
                 processButton.disabled = !csvFileInput.files.length;
             }
@@ -67,19 +65,30 @@ async function handleSingleVerification() {
             })
         });
 
-        const result = await response.json();
+        // The 'network error' could be due to a non-JSON response from a failed Vercel function (e.g., 500 error)
+        let result;
+        try {
+            result = await response.json();
+        } catch (e) {
+            // Handle cases where the Vercel function returns a non-JSON error (e.g., Vercel's default 500 page)
+            console.error("Non-JSON API response. Status:", response.status);
+            alert(`Verification Failed: Received a server error (${response.status}) from the Vercel API. Check Vercel logs.`);
+            return;
+        }
+
 
         if (response.ok && result.status === "Success") {
             displayResults(result);
         } else {
-            // Handle errors from the server (e.g., JSON parsing failure, API key missing)
+            // This captures errors sent as JSON from the Vercel function
             alert(`Verification Failed: ${result.error || result.remarks || "Unknown error."}`);
             displayErrorResult(result);
         }
 
     } catch (e) {
         console.error("Fetch Error:", e);
-        alert("A network error occurred. Check the console for details.");
+        // This is the true "network error" (CORS, DNS, connection refused)
+        alert("A network error occurred. Check the console for details. (Possible Vercel CORS/Domain issue)");
     } finally {
         // UI Feedback: Re-enable button and hide loading message
         document.getElementById('verifyButton').disabled = false;
@@ -143,9 +152,22 @@ async function fetchVerification(address, name) {
             body: JSON.stringify({ address: address, customerName: name })
         });
         
-        const result = await response.json();
+        let result = {};
+        try {
+            result = await response.json();
+        } catch (e) {
+            console.error("Non-JSON API response in bulk. Status:", response.status);
+            return {
+                status: "Error",
+                customerCleanName: name,
+                addressLine1: "Server Error",
+                remarks: `API Failed: Server returned non-JSON error (${response.status}).`,
+                addressQuality: "VERY BAD"
+            };
+        }
+
         
-        if (response.ok) {
+        if (response.ok && result.status === "Success") {
             return result;
         } else {
             return {
@@ -156,7 +178,7 @@ async function fetchVerification(address, name) {
                 state: "",
                 district: "",
                 pin: "",
-                remarks: `API Failed: ${result.error || 'Unknown Server Error.'}`,
+                remarks: `API Failed: ${result.error || result.remarks || 'Unknown Server Error.'}`,
                 addressQuality: "BAD"
             };
         }
@@ -170,7 +192,7 @@ async function fetchVerification(address, name) {
             state: "",
             district: "",
             pin: "",
-            remarks: "Network or timeout error during API call.",
+            remarks: "Network or timeout error during API call. (Check CORS/Vercel)",
             addressQuality: "VERY BAD"
         };
     }
@@ -298,7 +320,8 @@ async function handleBulkVerification() {
         // Finalize
         statusMessage.textContent = `Processing complete! ${totalAddresses} addresses verified.`;
         createAndDownloadCSV(outputRows, "verified_addresses.csv");
-
+        processButton.disabled = false;
+        fileInput.disabled = false;
     };
 
     reader.onerror = function() {
