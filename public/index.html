@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Address Verification Service</title>
+    <title>AI Address Verification</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -13,7 +13,7 @@
                     colors: {
                         'primary-blue': '#1D4ED8', // Dark Blue
                         'secondary-green': '#059669', // Dark Green
-                        'neutral-gray': '#E5E7EB',
+                        'neutral-gray': '#F3F4F6', // Light Gray background
                     },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
@@ -28,32 +28,28 @@
 </head>
 <body class="bg-neutral-gray min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-lg bg-white p-8 sm:p-10 rounded-xl shadow-2xl text-center">
-        
+
         <header class="mb-8">
             <h1 class="text-4xl font-extrabold text-gray-900 mb-2">
-                <span class="text-primary-blue">AI Address</span> Verification
+                <span class="text-primary-blue">AI Address</span> Verification Service
             </h1>
-            <p class="text-gray-500 text-lg">Choose a method to clean, standardize, and verify Indian addresses.</p>
+            <p class="text-gray-500">Choose a method to clean, normalize, and verify addresses using Gemini.</p>
         </header>
-
-        <div class="options-container space-y-5">
-            
-            <!-- Single Verification Link -->
-            <a href="single.html" class="block w-full py-4 bg-primary-blue text-white font-bold rounded-lg shadow-lg hover:bg-blue-700 transition duration-200 transform hover:scale-[1.02] focus:outline-none focus:ring-4 focus:ring-primary-blue focus:ring-opacity-50 flex items-center justify-center">
-                <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                Verify Single Address (Real-time)
+        
+        <div class="options-container space-y-4">
+            <!-- Link to Single Verification -->
+            <!-- FIX: Using relative path /single.html, which works better for internal navigation in GitHub Pages than full URL unless we need cross-repository navigation -->
+            <a href="single.html" class="block w-full py-4 bg-primary-blue text-white font-bold rounded-lg shadow-lg hover:bg-blue-700 transition duration-200 transform hover:scale-[1.01] focus:outline-none focus:ring-4 focus:ring-primary-blue focus:ring-opacity-50">
+                📝 Verify Single Address
             </a>
             
-            <!-- Bulk Verification Link -->
-            <a href="bulk.html" class="block w-full py-4 bg-secondary-green text-white font-bold rounded-lg shadow-lg hover:bg-green-700 transition duration-200 transform hover:scale-[1.02] focus:outline-none focus:ring-4 focus:ring-secondary-green focus:ring-opacity-50 flex items-center justify-center">
-                <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
-                Bulk Address Verification (CSV)
+            <!-- Link to Bulk Verification -->
+            <a href="bulk.html" class="block w-full py-4 bg-secondary-green text-white font-bold rounded-lg shadow-lg hover:bg-green-700 transition duration-200 transform hover:scale-[1.01] focus:outline-none focus:ring-4 focus:ring-secondary-green focus:ring-opacity-50">
+                📦 Bulk Address Verification
             </a>
         </div>
         
-        <p class="text-sm text-gray-400 mt-8">
-            Powered by Google Gemini and India Post API.
-        </p>
+        <p class="text-sm text-gray-500 mt-8">Powered by Gemini and India Post API.</p>
     </div>
 </body>
 </html>
