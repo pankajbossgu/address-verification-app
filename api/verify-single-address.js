@@ -5,6 +5,7 @@
 const INDIA_POST_API = 'https://api.postalpincode.in/pincode/';
 let pincodeCache = {}; 
 
+// These lists are used for cleanup in the final server-side step.
 const testingKeywords = ['test', 'testing', 'asdf', 'qwer', 'zxcv', 'random', 'gjnj', 'fgjnj'];
 const meaningfulWords = [
     "ddadu", "ddadu", "ai", "add", "add-", "raw", "dumping", "grand", "dumping grand",
@@ -42,6 +43,11 @@ function removeAdjacentDuplicates(str) {
     return cleanedWords.join(' ').replace(/\s+(null|not found)\s*/gi, ' ').trim();
 }
 
+/**
+ * Fetches and caches official postal data from India Post API based on PIN code.
+ * @param {string} pin The 6-digit PIN code.
+ * @returns {Promise<Object>} Postal data object.
+ */
 async function getIndiaPostData(pin) {
     if (pincodeCache[pin]) return pincodeCache[pin];
 
@@ -74,12 +80,19 @@ async function getIndiaPostData(pin) {
     }
 }
 
+/**
+ * Calls the Gemini API to get a structured address verification response.
+ * NOTE: The model used here is 'gemini-2.0-flash'.
+ * @param {string} prompt The detailed prompt for Gemini.
+ * @returns {Promise<Object>} Contains text response or an error.
+ */
 async function getGeminiResponse(prompt) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
         return { text: null, error: "Gemini API key not set in Vercel environment variables." };
     }
 
+    // Using gemini-2.0-flash endpoint
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
     const requestBody = {
@@ -103,7 +116,15 @@ async function getGeminiResponse(prompt) {
         }
 
         if (result.candidates && result.candidates.length > 0) {
-            return { text: result.candidates[0].content.parts[0].text, error: null };
+            // Check if parts[0].text exists
+            const textPart = result.candidates[0].content.parts.find(p => p.text)?.text;
+            if (textPart) {
+                return { text: textPart, error: null };
+            } else {
+                const errorMessage = "Gemini API Error: Content part is missing text.";
+                console.error(errorMessage);
+                return { text: null, error: errorMessage };
+            }
         } else {
             const errorMessage = "Gemini API Error: No candidates found in response.";
             console.error(errorMessage);
@@ -116,11 +137,22 @@ async function getGeminiResponse(prompt) {
     }
 }
 
+/**
+ * Extracts a 6-digit PIN code from an address string.
+ * @param {string} address The raw address.
+ * @returns {string|null} The 6-digit PIN or null.
+ */
 function extractPin(address) {
     const match = String(address).match(/\b\d{6}\b/);
     return match ? match[0] : null;
 }
 
+/**
+ * Builds the detailed system prompt for the Gemini model.
+ * @param {string} originalAddress The raw address string.
+ * @param {Object} postalData The result from India Post API lookup.
+ * @returns {string} The complete prompt asking for structured JSON output.
+ */
 function buildGeminiPrompt(originalAddress, postalData) {
     let basePrompt = `You are an expert Indian address verifier and formatter. Your task is to process a raw address, perform a thorough analysis, and provide a comprehensive response in a single JSON object. Provide all responses in English only. Strictly translate all extracted address components to English. Correct all common spelling and phonetic errors in the provided address, such as "rd" to "Road", "nager" to "Nagar", and "nd" to "2nd". Analyze common short forms and phonetic spellings, such as "lean" for "Lane", and use your best judgment to correct them. Be strict about ensuring the output is a valid, single, and complete address for shipping. Use your advanced knowledge to identify and remove any duplicate address components that are present consecutively (e.g., 'Gandhi Street Gandhi Street' should be 'Gandhi Street').
 
@@ -153,6 +185,12 @@ Raw Address: "${originalAddress}"
     return basePrompt;
 }
 
+/**
+ * Combines prompt building and Gemini API call.
+ * @param {string} address The raw address string.
+ * @param {Object} postalData The result from India Post API lookup.
+ * @returns {Promise<Object>} The Gemini response object.
+ */
 function processAddress(address, postalData) {
     const prompt = buildGeminiPrompt(address, postalData);
     return getGeminiResponse(prompt);
@@ -161,9 +199,9 @@ function processAddress(address, postalData) {
 // --- 2. MAIN HANDLER ---
 
 module.exports = async (req, res) => {
-    // START OF CORS FIX
+    // START OF CORS FIX (Essential for Vercel functions accessed from static sites)
     res.setHeader('Access-Control-Allow-Credentials', true);
-    res.setHeader('Access-Control-Allow-Origin', 'https://pankajbossgu.github.io');
+    res.setHeader('Access-Control-Allow-Origin', '*'); // Use '*' for broader access, or specify domains
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
     
@@ -185,7 +223,10 @@ module.exports = async (req, res) => {
             return res.status(400).json({ status: "Error", error: "Address is required." });
         }
 
+        // Clean customer name for output
         const cleanedName = customerName ? customerName.replace(/[^\w\s]/gi, '').replace(/\s+/g, ' ').trim() : null;
+        
+        // Initial PIN extraction and India Post lookup
         const initialPin = extractPin(address);
         let postalData = { PinStatus: 'Error' };
         
@@ -202,17 +243,17 @@ module.exports = async (req, res) => {
         // 2. Parse Gemini JSON output
         let parsedData;
         try {
-            // Attempt to clean up and parse the JSON string
+            // Attempt to clean up and parse the JSON string, removing markdown wrappers
             const jsonText = geminiResult.text.replace(/```json|```/g, '').trim();
             parsedData = JSON.parse(jsonText);
         } catch (e) {
-            console.error("JSON Parsing Error:", e.message);
+            console.error("JSON Parsing Error:", e.message, "Raw Output:", geminiResult.text);
             return res.status(500).json({ status: "Error", error: "Failed to parse Gemini output as JSON.", rawOutput: geminiResult.text });
         }
 
         // 3. Final cleanup and formatting
         
-        // ** Apply Cleanup to primary address fields **
+        // ** Apply server-side cleanup to key fields **
         if (parsedData.FormattedAddress) {
             parsedData.FormattedAddress = removeAdjacentDuplicates(parsedData.FormattedAddress);
         }
@@ -220,14 +261,23 @@ module.exports = async (req, res) => {
             parsedData.Landmark = removeAdjacentDuplicates(parsedData.Landmark);
         }
         
-        // Extract and verify PIN again from parsed data
-        const finalPin = String(parsedData.PIN || '').match(/\b\d{6}\b/) ? parsedData.PIN : initialPin;
+        // Extract and verify PIN again from parsed data (prioritize Gemini's corrected PIN)
+        const finalPinCandidate = String(parsedData.PIN || '').match(/\b\d{6}\b/) ? parsedData.PIN : initialPin;
+        let finalPin = finalPinCandidate; // Default to best guess
 
         // Re-run India Post lookup if Gemini suggested a different PIN or if initial lookup failed
-        if (finalPin && finalPin !== initialPin) {
-            const finalPostalData = await getIndiaPostData(finalPin);
+        if (finalPinCandidate && finalPinCandidate !== initialPin || postalData.PinStatus === 'Error') {
+            const finalPostalData = await getIndiaPostData(finalPinCandidate);
             if (finalPostalData.PinStatus === 'Success') {
                 postalData = finalPostalData;
+                finalPin = finalPinCandidate; // Confirm the PIN if it yielded successful postal data
+            } else if (initialPin && initialPin !== finalPinCandidate) {
+                // If the new PIN failed, try the old one again just in case
+                 const fallbackPostalData = await getIndiaPostData(initialPin);
+                 if (fallbackPostalData.PinStatus === 'Success') {
+                    postalData = fallbackPostalData;
+                    finalPin = initialPin;
+                 }
             }
         }
 
@@ -249,7 +299,7 @@ module.exports = async (req, res) => {
             tehsil: primaryPostOffice.Taluk || parsedData.Tehsil || '',
             district: primaryPostOffice.District || parsedData['DIST.'] || '',
             state: primaryPostOffice.State || parsedData.State || '',
-            pin: finalPin || parsedData.PIN || null,
+            pin: finalPin || parsedData.PIN || null, // Use the verified pin, or fall back
 
             // Quality/Verification Metrics
             addressQuality: parsedData.AddressQuality || 'Medium',
