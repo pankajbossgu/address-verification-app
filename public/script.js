@@ -1,29 +1,22 @@
-// Global script file for frontend interactions.
-
-// IMPORTANT: Replace this placeholder with your actual Vercel API domain!
 const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
 
 document.addEventListener('DOMContentLoaded', () => {
-    // --- Setup for single.html ---
     const verifyButton = document.getElementById('verifyButton');
     if (verifyButton) {
         verifyButton.addEventListener('click', handleSingleVerification);
     }
     
-    // --- Setup for bulk.html ---
     const downloadTemplateButton = document.getElementById('downloadTemplateButton');
     const csvFileInput = document.getElementById('csvFileInput');
     const processButton = document.getElementById('processButton');
 
     if (downloadTemplateButton) {
         downloadTemplateButton.addEventListener('click', handleTemplateDownload);
-        // Enable input after the template button is ready
         if (csvFileInput) csvFileInput.disabled = false;
     }
 
     if (csvFileInput) {
         csvFileInput.addEventListener('change', () => {
-            // Enable process button only if a file is selected
             if (processButton) {
                 processButton.disabled = !csvFileInput.files.length;
             }
@@ -34,10 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
         processButton.addEventListener('click', handleBulkVerification);
     }
 });
-
-// =================================================================================================
-// SINGLE VERIFICATION LOGIC
-// =================================================================================================
 
 async function handleSingleVerification() {
     const rawAddress = document.getElementById('rawAddress').value;
@@ -50,7 +39,6 @@ async function handleSingleVerification() {
         return;
     }
 
-    // UI Feedback: Disable button and show loading message
     document.getElementById('verifyButton').disabled = true;
     loadingMessage.style.display = 'block';
     resultsContainer.style.display = 'none';
@@ -67,21 +55,27 @@ async function handleSingleVerification() {
             })
         });
 
-        const result = await response.json();
+        let result;
+        try {
+            result = await response.json();
+        } catch (e) {
+            console.error("Non-JSON API response. Status:", response.status);
+            alert(`Verification Failed: Received a server error (${response.status}) from the Vercel API. Check Vercel logs.`);
+            return;
+        }
+
 
         if (response.ok && result.status === "Success") {
             displayResults(result);
         } else {
-            // Handle errors from the server (e.g., JSON parsing failure, API key missing)
             alert(`Verification Failed: ${result.error || result.remarks || "Unknown error."}`);
             displayErrorResult(result);
         }
 
     } catch (e) {
         console.error("Fetch Error:", e);
-        alert("A network error occurred. Check the console for details.");
+        alert("A network error occurred. Check the console for details. (Possible Vercel CORS/Domain issue)");
     } finally {
-        // UI Feedback: Re-enable button and hide loading message
         document.getElementById('verifyButton').disabled = false;
         loadingMessage.style.display = 'none';
         resultsContainer.style.display = 'block';
@@ -110,14 +104,6 @@ function displayErrorResult(data) {
     document.getElementById('out-quality').textContent = 'BAD';
 }
 
-
-// =================================================================================================
-// BULK VERIFICATION LOGIC
-// =================================================================================================
-
-/**
- * Function to download the CSV template
- */
 function handleTemplateDownload() {
     const templateData = "ORDER ID,CUSTOMER NAME,CUSTOMER RAW ADDRESS\n";
     const blob = new Blob([templateData], { type: 'text/csv;charset=utf-8;' });
@@ -132,9 +118,6 @@ function handleTemplateDownload() {
     document.body.removeChild(link);
 }
 
-/**
- * Helper to call the Vercel API and handle basic errors.
- */
 async function fetchVerification(address, name) {
     try {
         const response = await fetch(API_ENDPOINT, {
@@ -143,9 +126,22 @@ async function fetchVerification(address, name) {
             body: JSON.stringify({ address: address, customerName: name })
         });
         
-        const result = await response.json();
+        let result = {};
+        try {
+            result = await response.json();
+        } catch (e) {
+            console.error("Non-JSON API response in bulk. Status:", response.status);
+            return {
+                status: "Error",
+                customerCleanName: name,
+                addressLine1: "Server Error",
+                remarks: `API Failed: Server returned non-JSON error (${response.status}).`,
+                addressQuality: "VERY BAD"
+            };
+        }
+
         
-        if (response.ok) {
+        if (response.ok && result.status === "Success") {
             return result;
         } else {
             return {
@@ -156,7 +152,7 @@ async function fetchVerification(address, name) {
                 state: "",
                 district: "",
                 pin: "",
-                remarks: `API Failed: ${result.error || 'Unknown Server Error.'}`,
+                remarks: `API Failed: ${result.error || result.remarks || 'Unknown Server Error.'}`,
                 addressQuality: "BAD"
             };
         }
@@ -170,15 +166,12 @@ async function fetchVerification(address, name) {
             state: "",
             district: "",
             pin: "",
-            remarks: "Network or timeout error during API call.",
+            remarks: "Network or timeout error during API call. (Check CORS/Vercel)",
             addressQuality: "VERY BAD"
         };
     }
 }
 
-/**
- * Creates a CSV file and triggers a download.
- */
 function createAndDownloadCSV(dataArray, filename) {
     const csvContent = dataArray.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -190,10 +183,6 @@ function createAndDownloadCSV(dataArray, filename) {
     downloadLink.style.display = 'block';
 }
 
-
-/**
- * Main function to handle CSV upload, batch processing, and download.
- */
 async function handleBulkVerification() {
     const fileInput = document.getElementById('csvFileInput');
     const file = fileInput.files[0];
@@ -207,7 +196,6 @@ async function handleBulkVerification() {
     const progressBarFill = document.getElementById('progressBarFill');
     const downloadLink = document.getElementById('downloadLink');
 
-    // UI Setup
     processButton.disabled = true;
     fileInput.disabled = true;
     downloadLink.style.display = 'none';
@@ -228,7 +216,6 @@ async function handleBulkVerification() {
 
         const headers = lines[0].split(',').map(h => h.trim().toUpperCase());
         
-        // Basic header validation
         if (headers.length < 3 || headers[2] !== 'CUSTOMER RAW ADDRESS') {
             alert("Error: CSV must contain 'ORDER ID', 'CUSTOMER NAME', and 'CUSTOMER RAW ADDRESS' in the first three columns.");
             processButton.disabled = false;
@@ -242,10 +229,9 @@ async function handleBulkVerification() {
             "STATE", "DISTRICT", "PIN", "REMARK", "ADDRESS QUALITY"
         ].join(',');
         let processedCount = 0;
-        const totalAddresses = lines.length - 1; // Exclude header row
+        const totalAddresses = lines.length - 1;
         const outputRows = [outputData];
 
-        // Process addresses one by one
         for (let i = 1; i < lines.length; i++) {
             const row = lines[i].split(',');
             const orderId = row[0] || 'N/A';
@@ -267,11 +253,9 @@ async function handleBulkVerification() {
                     addressQuality: "BAD"
                 };
             } else {
-                // Call the Vercel API
                 verificationResult = await fetchVerification(rawAddress, customerName);
             }
 
-            // Map and escape data for CSV
             const outputRow = [
                 orderId,
                 customerName,
@@ -284,21 +268,20 @@ async function handleBulkVerification() {
                 verificationResult.pin || '',
                 verificationResult.remarks || '',
                 verificationResult.addressQuality || ''
-            ].map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','); // Simple CSV escaping
+            ].map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',');
 
             outputRows.push(outputRow);
             
-            // Update Progress
             processedCount++;
             const progress = (processedCount / totalAddresses) * 100;
             progressBarFill.style.width = `${progress}%`;
             statusMessage.textContent = `Processing... ${processedCount} of ${totalAddresses} addresses completed.`;
         }
 
-        // Finalize
         statusMessage.textContent = `Processing complete! ${totalAddresses} addresses verified.`;
         createAndDownloadCSV(outputRows, "verified_addresses.csv");
-
+        processButton.disabled = false;
+        fileInput.disabled = false;
     };
 
     reader.onerror = function() {
