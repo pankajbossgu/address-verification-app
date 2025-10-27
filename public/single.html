@@ -31,8 +31,8 @@
 <body class="bg-neutral-gray min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-2xl bg-white p-8 sm:p-10 rounded-xl shadow-2xl">
 
-        <!-- Back Link pointing to root (/) to help bypass cache issues -->
-        <a href="/" class="text-primary-blue hover:text-blue-700 font-medium mb-6 inline-flex items-center transition duration-150">
+        <!-- Back Link pointing to the application root for reliable GitHub Pages navigation -->
+        <a href="/address-verification-app/" class="text-primary-blue hover:text-blue-700 font-medium mb-6 inline-flex items-center transition duration-150">
             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
             Back to Home
         </a>
@@ -106,7 +106,7 @@
         </div>
     </div>
     
-    <!-- JavaScript logic from public/script.js needs to be inline here -->
+    <!-- JavaScript logic needs to be inline here -->
     <script>
         const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
 
@@ -133,29 +133,41 @@
 
         async function fetchVerification(rawAddress, customerName) {
             const payload = { rawAddress, customerName };
-            try {
-                const response = await fetch(API_ENDPOINT, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                
-                if (!response.ok) {
-                    const errorBody = await response.json();
-                    throw new Error(errorBody.error || `Server responded with status ${response.status}`);
-                }
-                
-                return await response.json();
+            // Simple exponential backoff retry mechanism
+            const maxRetries = 3;
+            let lastError = null;
 
-            } catch (error) {
-                console.error("Verification API Error:", error);
-                // Return a structured error response
-                return { 
-                    status: "Error", 
-                    error: `Verification failed: ${error.message}`,
-                    remarks: `Error during verification: ${error.message}`
-                };
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const response = await fetch(API_ENDPOINT, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (!response.ok) {
+                        const errorBody = await response.json();
+                        throw new Error(errorBody.error || `Server responded with status ${response.status}`);
+                    }
+                    
+                    return await response.json();
+
+                } catch (error) {
+                    lastError = error;
+                    console.error(`Verification API Attempt ${attempt + 1} failed:`, error);
+                    if (attempt < maxRetries - 1) {
+                        // Wait for 2^attempt seconds before retrying
+                        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+                    }
+                }
             }
+
+            // If all retries fail, return a structured error response
+            return { 
+                status: "Error", 
+                error: `Verification failed after ${maxRetries} attempts.`,
+                remarks: `Error during verification: ${lastError ? lastError.message : 'Unknown Network Error'}`
+            };
         }
 
         async function handleSingleVerification() {
@@ -189,22 +201,23 @@
                     return;
                 }
 
+                // Hide loading message and show results
+                loadingMessage.classList.add('hidden');
+                resultsContainer.classList.remove('hidden');
+
                 // Populate results
                 document.getElementById('out-name').textContent = verificationResult.customerCleanName || 'N/A';
                 document.getElementById('out-address').textContent = verificationResult.addressLine1 || 'N/A';
-                // Note: I'm omitting Landmark and Tehsil in this basic UI to keep it clean, but they are in the full API response.
                 document.getElementById('out-district').textContent = verificationResult.district || 'N/A';
                 document.getElementById('out-state').textContent = verificationResult.state || 'N/A';
                 document.getElementById('out-pin').textContent = verificationResult.pin || 'N/A';
                 document.getElementById('out-quality').textContent = verificationResult.addressQuality || 'N/A';
                 document.getElementById('out-remarks').textContent = verificationResult.remarks || 'No specific remarks.';
-
-                // Show results
-                resultsContainer.classList.remove('hidden');
-                loadingMessage.classList.add('hidden');
                 
             } catch (e) {
                 showMessage('loading-message', `An unexpected error occurred: ${e.message}`, true);
+                loadingMessage.classList.remove('hidden'); // Ensure message is visible on catch
+                resultsContainer.classList.add('hidden');
             } finally {
                 verifyButton.disabled = false;
                 verifyButton.textContent = 'Verify Address';
