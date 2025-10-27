@@ -16,6 +16,12 @@ const meaningfulWords = [
 const meaninglessRegex = new RegExp(`\\b(?:${meaningfulWords.join('|')})\\b`, 'gi');
 const directionalKeywords = ['near', 'opposite', 'back side', 'front side', 'behind', 'opp'];
 
+/**
+ * Removes adjacent duplicate words and cleans up 'null'/'not found' strings.
+ * This function was crashing previously due to strict access, now fixed.
+ * @param {string} str The string to clean.
+ * @returns {string} The cleaned string.
+ */
 function removeAdjacentDuplicates(str) {
     if (!str || typeof str !== 'string' || str.trim() === '') {
         return '';
@@ -179,7 +185,7 @@ module.exports = async (req, res) => {
             return res.status(400).json({ status: "Error", error: "Address is required." });
         }
 
-        const cleanedName = customerName.replace(/[^\w\s]/gi, '').replace(/\s+/g, ' ').trim() || null;
+        const cleanedName = customerName ? customerName.replace(/[^\w\s]/gi, '').replace(/\s+/g, ' ').trim() : null;
         const initialPin = extractPin(address);
         let postalData = { PinStatus: 'Error' };
         
