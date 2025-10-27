@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Single Address Verification</title>
-    <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -31,7 +30,6 @@
 <body class="bg-neutral-gray min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-2xl bg-white p-8 sm:p-10 rounded-xl shadow-2xl">
 
-        <!-- Back Link FIX: Now using the full absolute URL for guaranteed redirection -->
         <a href="https://pankajbossgu.github.io/address-verification-app/" class="text-primary-blue hover:text-blue-700 font-medium mb-6 inline-flex items-center transition duration-150">
             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
             Back to Home
@@ -45,30 +43,25 @@
         </header>
         
         <div class="space-y-6">
-            <!-- Customer Name Input -->
             <div>
                 <label for="customerName" class="block text-sm font-medium text-gray-700 mb-1">Customer Name (Optional)</label>
                 <input type="text" id="customerName" placeholder="e.g., Pankaj Bossgu" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue transition duration-150">
             </div>
 
-            <!-- Raw Address Input -->
             <div>
                 <label for="rawAddress" class="block text-sm font-medium text-gray-700 mb-1">Raw Address to Verify</label>
                 <textarea id="rawAddress" rows="4" placeholder="e.g., H.No. 123, Sector 40B, near bus stand, Chandigarh" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue resize-none transition duration-150"></textarea>
             </div>
 
-            <!-- Verification Button -->
             <button id="verifyButton" class="w-full py-3 bg-secondary-green text-white font-bold rounded-lg shadow-md hover:bg-green-700 transition duration-200 transform hover:scale-[1.01] focus:outline-none focus:ring-4 focus:ring-secondary-green focus:ring-opacity-50">
                 Verify Address
             </button>
             
-            <!-- Loading Message -->
             <div id="loading-message" class="hidden text-center text-primary-blue font-semibold py-3 border border-blue-200 bg-blue-50 rounded-lg">
                 Processing... Please wait a few seconds while Gemini processes your request.
             </div>
         </div>
 
-        <!-- Results Container -->
         <div id="resultsContainer" class="hidden mt-10">
             <h3 class="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">Verification Results</h3>
             <div class="space-y-4">
@@ -106,7 +99,6 @@
         </div>
     </div>
     
-    <!-- JavaScript logic needs to be inline here -->
     <script>
         const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
 
@@ -132,7 +124,10 @@
         }
 
         async function fetchVerification(rawAddress, customerName) {
-            const payload = { rawAddress, customerName };
+            // ❌ CRITICAL FIX APPLIED HERE ❌
+            // Change payload key from `rawAddress` to `address` to match Vercel backend expectation
+            const payload = { address: rawAddress, customerName }; 
+            
             // Simple exponential backoff retry mechanism
             const maxRetries = 3;
             let lastError = null;
@@ -147,6 +142,7 @@
                     
                     if (!response.ok) {
                         const errorBody = await response.json();
+                        // This will capture the 400 error message "Address is required."
                         throw new Error(errorBody.error || `Server responded with status ${response.status}`);
                     }
                     
