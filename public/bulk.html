@@ -157,12 +157,6 @@
 
 
         async function fetchVerification(rawAddress, customerName) {
-            // NOTE: The API expects `address` not `rawAddress` in the body, but your `single.html` also sends
-            // `rawAddress`. Assuming your Vercel API function expects `address` as per your error log
-            // (if it checks for `req.body.address`), we must send the correct payload keys.
-            // Based on the Vercel log and common API practice, the API likely expects 'address'.
-            
-            // Assuming your Vercel backend expects `address` as per the 400 error analysis:
             const payload = { address: rawAddress, customerName }; 
             
             const maxRetries = 3;
@@ -191,14 +185,23 @@
                     }
                 }
             }
+            // Return a predictable structure even on network/fetch errors to prevent CSV output breaks
             return { 
                 status: "Error", 
                 error: `Verification failed after ${maxRetries} attempts.`,
-                remarks: `Error: ${lastError ? lastError.message : 'Unknown Network Error'}`
+                remarks: `Error: ${lastError ? lastError.message : 'Unknown Network Error'}`,
+                customerCleanName: customerName,
+                addressLine1: "API Error: See Remarks",
+                landmark: "", // Always provide this field
+                state: "",
+                district: "",
+                pin: "",
+                addressQuality: "VERY BAD"
             };
         }
 
         function createAndDownloadCSV(rows, filename) {
+            // Updated header to match the output columns including LANDMARK
             const header = "ORDER ID,CUSTOMER NAME,CUSTOMER RAW ADDRESS,CLEAN NAME,CLEAN ADDRESS LINE 1,LANDMARK,STATE,DISTRICT,PIN,REMARKS,QUALITY\n";
             const csvContent = header + rows.join('\n');
             
@@ -255,7 +258,7 @@
                     let verificationResult;
 
                     if (!rawAddress || rawAddress.trim() === "") { // Defensive check for missing address
-                        verificationResult = { status: "Error", remarks: "Missing raw address in CSV row.", addressQuality: "Poor" };
+                        verificationResult = { status: "Error", remarks: "Missing raw address in CSV row.", addressQuality: "Poor", customerCleanName: customerName, addressLine1: "", landmark: "", state: "", district: "", pin: "" };
                     } else {
                         // FIX: Pass the correct parameters to fetchVerification
                         verificationResult = await fetchVerification(rawAddress, customerName);
