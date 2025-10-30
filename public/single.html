@@ -73,6 +73,11 @@
                     <strong class="text-gray-600 block mb-1">Clean Address Line 1:</strong> 
                     <span id="out-address" class="text-gray-800 font-medium"></span>
                 </div>
+                
+                <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                    <strong class="text-gray-600 block mb-1">Landmark (with Prefix):</strong> 
+                    <span id="out-landmark" class="text-gray-800 font-medium"></span>
+                </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                         <strong class="text-gray-600 block mb-1">District:</strong> 
@@ -124,8 +129,6 @@
         }
 
         async function fetchVerification(rawAddress, customerName) {
-            // ❌ CRITICAL FIX APPLIED HERE ❌
-            // Change payload key from `rawAddress` to `address` to match Vercel backend expectation
             const payload = { address: rawAddress, customerName }; 
             
             // Simple exponential backoff retry mechanism
@@ -142,7 +145,6 @@
                     
                     if (!response.ok) {
                         const errorBody = await response.json();
-                        // This will capture the 400 error message "Address is required."
                         throw new Error(errorBody.error || `Server responded with status ${response.status}`);
                     }
                     
@@ -204,6 +206,7 @@
                 // Populate results
                 document.getElementById('out-name').textContent = verificationResult.customerCleanName || 'N/A';
                 document.getElementById('out-address').textContent = verificationResult.addressLine1 || 'N/A';
+                document.getElementById('out-landmark').textContent = verificationResult.landmark || 'N/A';
                 document.getElementById('out-district').textContent = verificationResult.district || 'N/A';
                 document.getElementById('out-state').textContent = verificationResult.state || 'N/A';
                 document.getElementById('out-pin').textContent = verificationResult.pin || 'N/A';
