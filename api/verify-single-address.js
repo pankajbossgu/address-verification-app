@@ -1,6 +1,16 @@
 // api/verify-single-address.js
 // Vercel Serverless Function (Node.js)
 
+// --- NEW: SUPABASE SETUP ---
+const { createClient } = require('@supabase/supabase-js'); 
+// Initialize Supabase client using the Anon Key
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_ANON_KEY 
+);
+// --- END NEW SETUP ---
+
+
 // --- 1. CONFIGURATION AND UTILITIES ---
 const INDIA_POST_API = 'https://api.postalpincode.in/pincode/';
 let pincodeCache = {}; 
@@ -106,15 +116,15 @@ function buildGeminiPrompt(originalAddress, postalData) {
     let basePrompt = `You are an expert Indian address verifier and formatter. Your task is to process a raw address, perform a thorough analysis, and provide a comprehensive response in a single JSON object. Provide all responses in English only. Strictly translate all extracted address components to English. Correct all common spelling and phonetic errors in the provided address, such as "rd" to "Road", "nager" to "Nagar", and "nd" to "2nd". Analyze common short forms and phonetic spellings, such as "lean" for "Lane", and use your best judgment to correct them. Be strict about ensuring the output is a valid, single, and complete address for shipping. Use your advanced knowledge to identify and remove any duplicate address components that are present consecutively (e.g., 'Gandhi Street Gandhi Street' should be 'Gandhi Street').
 
 Your response must contain the following keys:
-1.  "H.no.", "Flat No.", "Plot No.", "Room No.", "Building No.", "Block No.", "Ward No.", "Gali No.", "Zone No.": Extract only the number or alphanumeric sequence (e.g., '1-26', 'A/25', '10'). Set to null if not found.
-2.  "Colony", "Street", "Locality", "Building Name", "House Name", "Floor": Extract the name.
-3.  "P.O.": The official Post Office name from the PIN data. Prepend "P.O." to the name. Example: "P.O. Boduppal".
-4.  "Tehsil": The official Tehsil/SubDistrict from the PIN data. Prepend "Tehsil". Example: "Tehsil Pune".
-5.  "DIST.": The official District from the PIN data.
-6.  "State": The official State from the PIN data.
-7.  "PIN": The 6-digit PIN code. Find and verify the correct PIN. If a PIN exists in the raw address but is incorrect, find the correct one and provide it.
-8.  "Landmark": A specific, named landmark (e.g., "Apollo Hospital"), not a generic type like "school". If multiple landmarks are present, list them comma-separated. **Extract the landmark without any directional words like 'near', 'opposite', 'behind' etc., as this will be handled by the script.**
-9.  "Remaining": A last resort for any text that does not fit into other fields. Clean this by removing meaningless words like 'job', 'raw', 'add-', 'tq', 'dist' and country, state, district, or PIN code.
+1.  "H.no.", "Flat No.", "Plot No.", "Room No.", "Building No.", "Block No.", "Ward No.", "Gali No.", "Zone No.": Extract only the number or alphanumeric sequence (e.g., '1-26', 'A/25', '10'). Set to null if not found.
+2.  "Colony", "Street", "Locality", "Building Name", "House Name", "Floor": Extract the name.
+3.  "P.O.": The official Post Office name from the PIN data. Prepend "P.O." to the name. Example: "P.O. Boduppal".
+4.  "Tehsil": The official Tehsil/SubDistrict from the PIN data. Prepend "Tehsil". Example: "Tehsil Pune".
+5.  "DIST.": The official District from the PIN data.
+6.  "State": The official State from the PIN data.
+7.  "PIN": The 6-digit PIN code. Find and verify the correct PIN. If a PIN exists in the raw address but is incorrect, find the correct one and provide it.
+8.  "Landmark": A specific, named landmark (e.g., "Apollo Hospital"), not a generic type like "school". If multiple landmarks are present, list them comma-separated. **Extract the landmark without any directional words like 'near', 'opposite', 'behind' etc., as this will be handled by the script.**
+9.  "Remaining": A last resort for any text that does not fit into other fields. Clean this by removing meaningless words like 'job', 'raw', 'add-', 'tq', 'dist' and country, state, district, or PIN code.
 10. "FormattedAddress": This is the most important field. Based on your full analysis, create a single, clean, human-readable, and comprehensive shipping-ready address string. It should contain all specific details (H.no., Room No., etc.), followed by locality, street, colony, P.O., Tehsil, and District. DO NOT include the State or PIN in this string. Use commas to separate logical components. Do not invent or "hallucinate" information.
 11. "LocationType": Identify the type of location (e.g., "Village", "Town", "City", "Urban Area").
 12. "AddressQuality": Analyze the address completeness and clarity for shipping. Categorize it as one of the following: Very Good, Good, Medium, Bad, or Very Bad.
@@ -147,7 +157,7 @@ module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', 'https://pankajbossgu.github.io');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, X-API-Key'); // Added X-API-Key
     
     if (req.method === 'OPTIONS') {
         res.status(200).end();
@@ -160,16 +170,48 @@ module.exports = async (req, res) => {
     }
     // END OF CORS FIX
 
+    // --- NEW: AUTHENTICATION & METERING LOGIC ---
+
+    // 1. Get API Key from the custom header 'x-api-key'
+    const clientApiKey = req.headers['x-api-key']; 
+    if (!clientApiKey) {
+        return res.status(401).json({ status: 'Error', error: 'Authentication required. Missing X-API-Key header.' });
+    }
+
+    // 2. Lookup Client and Check Status/Limits
+    let { data: client, error } = await supabase
+        .from('clients')
+        .select('id, plan_limit, current_usage, is_active')
+        .eq('api_key', clientApiKey)
+        .single();
+
+    if (error || !client) {
+        return res.status(403).json({ status: 'Error', error: 'Invalid API Key or client not found.' });
+    }
+    
+    // Check Subscription Status
+    if (!client.is_active) {
+        return res.status(403).json({ status: 'Error', error: 'Account is inactive. Please renew your subscription.' });
+    }
+
+    // Check Usage Limit
+    if (client.current_usage >= client.plan_limit) {
+        return res.status(429).json({ status: 'Error', error: `Limit exceeded (${client.plan_limit} verifications). Please upgrade your plan.` });
+    }
+
+    // --- END AUTHENTICATION ---
+
     try {
-        const { address, customerName } = req.body;
+        // NOTE: The request body variable name has been changed from 'address' to 'rawAddress' to match the frontend update.
+        const { rawAddress, customerName } = req.body; 
         let remarks = []; // Initialize remarks array
         
-        if (!address) {
+        if (!rawAddress) {
             return res.status(400).json({ status: "Error", error: "Address is required." });
         }
 
         const cleanedName = customerName.replace(/[^\w\s]/gi, '').replace(/\s+/g, ' ').trim() || null;
-        const initialPin = extractPin(address);
+        const initialPin = extractPin(rawAddress);
         let postalData = { PinStatus: 'Error' };
         
         if (initialPin) {
@@ -177,7 +219,7 @@ module.exports = async (req, res) => {
         }
 
         // 1. Call Gemini API
-        const geminiResult = await processAddress(address, postalData);
+        const geminiResult = await processAddress(rawAddress, postalData);
         if (geminiResult.error || !geminiResult.text) {
             return res.status(500).json({ status: "Error", error: geminiResult.error || "Gemini API failed to return text." });
         }
@@ -193,7 +235,7 @@ module.exports = async (req, res) => {
             remarks.push(`JSON parse failed. Raw Gemini Output: ${geminiResult.text.substring(0, 100)}...`);
             // Continue with fallback data
             parsedData = {
-                FormattedAddress: address.replace(meaninglessRegex, '').trim(),
+                FormattedAddress: rawAddress.replace(meaninglessRegex, '').trim(),
                 Landmark: '',
                 State: '',
                 DIST: '',
@@ -240,7 +282,7 @@ module.exports = async (req, res) => {
 
         // 4. --- Directional Prefix Logic for Landmark (Ported from Sheet Script) ---
         let landmarkValue = parsedData.Landmark || '';
-        const originalAddressLower = address.toLowerCase();
+        const originalAddressLower = rawAddress.toLowerCase();
         let finalLandmark = '';
 
         if (landmarkValue.toString().trim() !== '') {
@@ -248,7 +290,7 @@ module.exports = async (req, res) => {
             
             if (foundDirectionalWord) {
                 // Find the original spelling of the directional word in the raw address
-                const originalDirectionalWordMatch = address.match(new RegExp(`\\b${foundDirectionalWord.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i'));
+                const originalDirectionalWordMatch = rawAddress.match(new RegExp(`\\b${foundDirectionalWord.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i'));
                 const originalDirectionalWord = originalDirectionalWordMatch ? originalDirectionalWordMatch[0] : foundDirectionalWord;
                 
                 // Capitalize the first letter for clean display
@@ -276,7 +318,7 @@ module.exports = async (req, res) => {
             customerCleanName: cleanedName,
             
             // Core Address Components
-            addressLine1: parsedData.FormattedAddress || address.replace(meaninglessRegex, '').trim() || '',
+            addressLine1: parsedData.FormattedAddress || rawAddress.replace(meaninglessRegex, '').trim() || '',
             landmark: finalLandmark, // <<< UPDATED: Use the new variable with the prefix
             
             // Geographic Components (Prioritize India Post verification)
@@ -294,6 +336,14 @@ module.exports = async (req, res) => {
             // Remarks
             remarks: remarks.join('; ').trim(), // <<< UPDATED: Use the combined array of remarks
         };
+
+        // --- NEW: USAGE DECREMENT (Place right before success return) ---
+        const newUsage = client.current_usage + 1;
+        await supabase
+            .from('clients')
+            .update({ current_usage: newUsage })
+            .eq('id', client.id); 
+        // --- END NEW USAGE BLOCK ---
 
         return res.status(200).json(finalResponse);
 
