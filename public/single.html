@@ -174,7 +174,14 @@
             return { 
                 status: "Error", 
                 error: `Verification failed after ${maxRetries} attempts.`,
-                remarks: `Error during verification: ${lastError ? lastError.message : 'Unknown Network Error'}`
+                remarks: `CRITICAL_ALERT: Verification failed after ${maxRetries} attempts. Error: ${lastError ? lastError.message : 'Unknown Network Error'}`,
+                customerCleanName: customerName,
+                addressLine1: "API Error: See Remarks",
+                landmark: "",
+                state: "",
+                district: "",
+                pin: "",
+                addressQuality: "VERY BAD"
             };
         }
 
@@ -183,26 +190,33 @@
             const remarksSpan = document.getElementById('out-remarks');
             
             // Default classes (white background, gray border, gray text)
-            const defaultClasses = ['bg-white', 'border-gray-200', 'text-gray-800', 'italic'];
+            // Use specific utility classes for precise control
+            const defaultBlockClasses = ['bg-white', 'border-gray-200', 'border-1'];
+            const defaultSpanClasses = ['text-gray-800', 'italic'];
+
             // Alert classes (red background, red border, red text, bold font)
-            const alertClasses = ['bg-alert-light', 'border-red-300', 'text-alert-dark', 'font-bold', 'border-4'];
+            const alertBlockClasses = ['bg-alert-light', 'border-red-300', 'border-4'];
+            const alertSpanClasses = ['text-alert-dark', 'font-bold'];
 
             // Check if any critical alert exists in the remarks string
             const isAlert = remarks.includes(REMARKS_ALERT_PREFIX);
 
-            // Set the raw remarks text
+            // Set the raw remarks text, removing the prefix for display
             remarksSpan.textContent = remarks.replace(new RegExp(REMARKS_ALERT_PREFIX, 'g'), '').trim() || 'No specific remarks.';
 
+            // Reset classes
+            remarksBlock.classList.remove(...defaultBlockClasses, ...alertBlockClasses);
+            remarksSpan.classList.remove(...defaultSpanClasses, ...alertSpanClasses);
+
+
             if (isAlert) {
-                // Apply alert styles and remove default styles
-                remarksBlock.classList.remove(...defaultClasses.filter(c => !alertClasses.includes(c)));
-                remarksBlock.classList.add(...alertClasses);
-                remarksSpan.classList.remove('italic');
+                // Apply alert styles
+                remarksBlock.classList.add(...alertBlockClasses);
+                remarksSpan.classList.add(...alertSpanClasses);
             } else {
-                // Apply default styles and remove alert styles
-                remarksBlock.classList.remove(...alertClasses);
-                remarksBlock.classList.add(...defaultClasses.filter(c => c !== 'italic'));
-                remarksSpan.classList.add('italic');
+                // Apply default styles
+                remarksBlock.classList.add(...defaultBlockClasses);
+                remarksSpan.classList.add(...defaultSpanClasses);
             }
         }
 
@@ -233,8 +247,12 @@
                 const verificationResult = await fetchVerification(rawAddress, customerName);
 
                 if (verificationResult.status === "Error") {
-                     // Display the error clearly
+                     // Display the error clearly and apply the red style to the message block
                     showMessage('loading-message', `Verification Error: ${verificationResult.error || 'Unknown Error'}`, true);
+                    // Still attempt to apply remarks style if an error structure was returned by fetchVerification
+                    if (verificationResult.remarks) {
+                        applyRemarksStyle(verificationResult.remarks);
+                    }
                     return;
                 }
 
