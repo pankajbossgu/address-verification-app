@@ -15,6 +15,9 @@
                         'neutral-gray': '#E5E7EB',
                         'success-light': '#D1FAE5',
                         'success-dark': '#065F46',
+                        // Added colors for the critical alert
+                        'alert-light': '#FEE2E2', // Red-100
+                        'alert-dark': '#991B1B', // Red-800
                     },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
@@ -25,6 +28,10 @@
     </script>
     <style>
         body { font-family: 'Inter', sans-serif; }
+        /* Style for the remarks block to ensure it's easily targetable for the alert class */
+        .remarks-block {
+            transition: all 0.3s ease;
+        }
     </style>
 </head>
 <body class="bg-neutral-gray min-h-screen flex items-center justify-center p-4">
@@ -78,6 +85,7 @@
                     <strong class="text-gray-600 block mb-1">Landmark (with Prefix):</strong> 
                     <span id="out-landmark" class="text-gray-800 font-medium"></span>
                 </div>
+
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                         <strong class="text-gray-600 block mb-1">District:</strong> 
@@ -96,7 +104,8 @@
                         <span id="out-quality" class="text-gray-800"></span>
                     </div>
                 </div>
-                <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                
+                <div id="remarks-block" class="result-block remarks-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
                     <strong class="text-gray-600 block mb-1">Remarks:</strong> 
                     <span id="out-remarks" class="text-gray-800 italic"></span>
                 </div>
@@ -106,6 +115,7 @@
     
     <script>
         const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
+        const REMARKS_ALERT_PREFIX = "CRITICAL_ALERT:";
 
         document.addEventListener('DOMContentLoaded', () => {
             const verifyButton = document.getElementById('verifyButton');
@@ -168,6 +178,35 @@
             };
         }
 
+        function applyRemarksStyle(remarks) {
+            const remarksBlock = document.getElementById('remarks-block');
+            const remarksSpan = document.getElementById('out-remarks');
+            
+            // Default classes (white background, gray border, gray text)
+            const defaultClasses = ['bg-white', 'border-gray-200', 'text-gray-800', 'italic'];
+            // Alert classes (red background, red border, red text, bold font)
+            const alertClasses = ['bg-alert-light', 'border-red-300', 'text-alert-dark', 'font-bold', 'border-4'];
+
+            // Check if any critical alert exists in the remarks string
+            const isAlert = remarks.includes(REMARKS_ALERT_PREFIX);
+
+            // Set the raw remarks text
+            remarksSpan.textContent = remarks.replace(new RegExp(REMARKS_ALERT_PREFIX, 'g'), '').trim() || 'No specific remarks.';
+
+            if (isAlert) {
+                // Apply alert styles and remove default styles
+                remarksBlock.classList.remove(...defaultClasses.filter(c => !alertClasses.includes(c)));
+                remarksBlock.classList.add(...alertClasses);
+                remarksSpan.classList.remove('italic');
+            } else {
+                // Apply default styles and remove alert styles
+                remarksBlock.classList.remove(...alertClasses);
+                remarksBlock.classList.add(...defaultClasses.filter(c => c !== 'italic'));
+                remarksSpan.classList.add('italic');
+            }
+        }
+
+
         async function handleSingleVerification() {
             const rawAddress = document.getElementById('rawAddress').value;
             const customerName = document.getElementById('customerName').value;
@@ -211,7 +250,9 @@
                 document.getElementById('out-state').textContent = verificationResult.state || 'N/A';
                 document.getElementById('out-pin').textContent = verificationResult.pin || 'N/A';
                 document.getElementById('out-quality').textContent = verificationResult.addressQuality || 'N/A';
-                document.getElementById('out-remarks').textContent = verificationResult.remarks || 'No specific remarks.';
+                
+                // Apply the new styling logic for remarks
+                applyRemarksStyle(verificationResult.remarks);
                 
             } catch (e) {
                 showMessage('loading-message', `An unexpected error occurred: ${e.message}`, true);
