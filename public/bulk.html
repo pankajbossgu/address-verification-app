@@ -69,11 +69,241 @@
             </div>
             
             <a id="downloadLink" class="hidden mt-6 w-full py-3 bg-primary-blue text-white font-bold text-center rounded-lg shadow-md hover:bg-blue-700 transition duration-200 focus:outline-none focus:ring-4 focus:ring-primary-blue focus:ring-opacity-50" href="#" download="verified_addresses.csv">
-                ⬇️ Download Verified CSV
+                Download Verified CSV
             </a>
         </div>
     </div>
     
-    <script src="./script.js"></script>
+    <script>
+        const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const downloadTemplateButton = document.getElementById('downloadTemplateButton');
+            const csvFileInput = document.getElementById('csvFileInput');
+            const processButton = document.getElementById('processButton');
+
+            if (downloadTemplateButton) {
+                downloadTemplateButton.addEventListener('click', handleTemplateDownload);
+            }
+
+            if (csvFileInput) {
+                csvFileInput.addEventListener('change', () => {
+                    if (processButton) {
+                        processButton.disabled = !csvFileInput.files.length;
+                    }
+                });
+            }
+
+            if (processButton) {
+                processButton.addEventListener('click', handleBulkVerification);
+            }
+        });
+
+        function handleTemplateDownload() {
+            const templateHeaders = "ORDER ID,CUSTOMER NAME,CUSTOMER RAW ADDRESS\n";
+            const templateData = "1,\"John Doe\",\"H.No. 123, Sector 40B, near bus stand, Chandigarh\"\n2,\"Jane Smith\",\"5th Floor, Alpha Tower, Mumbai 400001\"\n";
+            const csvContent = templateHeaders + templateData;
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', 'address_verification_template.csv');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // ❌ CRITICAL FIX APPLIED HERE ❌
+        function parseCSV(text) {
+            // FIX: Split by the actual newline character '\n'
+            const lines = text.split('\n'); 
+            if (lines.length < 2) return [];
+
+            // Simple split for headers (handles the first row)
+            const header = lines[0].split(',').map(h => h.trim().replace(/^\"|\"$/g, ''));
+            const data = [];
+            
+            // Indices for required columns
+            const idIndex = header.indexOf('ORDER ID');
+            const nameIndex = header.indexOf('CUSTOMER NAME');
+            const addressIndex = header.indexOf('CUSTOMER RAW ADDRESS');
+
+            if (idIndex === -1 || nameIndex === -1 || addressIndex === -1) {
+                console.error("CSV header is missing one of the required columns.");
+                return [];
+            }
+
+            // Start from line 1 to skip header
+            for (let i = 1; i < lines.length; i++) {
+                if (lines[i].trim() === '') continue;
+                
+                // Using a regex match that can handle basic quoted fields, but with corrected escapes
+                const row = lines[i].match(/(".*?"|[^",\r\n]+)(?=\s*,|\s*$)/g) || [];
+                
+                // Clean up quoted values
+                const cleanedRow = row.map(cell => cell.trim().replace(/^\"|\"$/g, '').replace(/\"\"/g, '\"'));
+
+                // Ensure the row has enough columns based on max index
+                if (cleanedRow.length > Math.max(idIndex, nameIndex, addressIndex)) {
+                    data.push({
+                        'ORDER ID': cleanedRow[idIndex],
+                        'CUSTOMER NAME': cleanedRow[nameIndex],
+                        'CUSTOMER RAW ADDRESS': cleanedRow[addressIndex],
+                    });
+                }
+            }
+            return data;
+        }
+
+
+        async function fetchVerification(rawAddress, customerName) {
+            const payload = { address: rawAddress, customerName }; 
+            
+            const maxRetries = 3;
+            let lastError = null;
+
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const response = await fetch(API_ENDPOINT, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (!response.ok) {
+                        const errorBody = await response.json();
+                        throw new Error(errorBody.error || `Server responded with status ${response.status}`);
+                    }
+                    
+                    return await response.json();
+
+                } catch (error) {
+                    lastError = error;
+                    console.error(`Verification API Attempt ${attempt + 1} failed:`, error);
+                    if (attempt < maxRetries - 1) {
+                        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+                    }
+                }
+            }
+            // Return a predictable structure even on network/fetch errors to prevent CSV output breaks
+            return { 
+                status: "Error", 
+                error: `Verification failed after ${maxRetries} attempts.`,
+                remarks: `Error: ${lastError ? lastError.message : 'Unknown Network Error'}`,
+                customerCleanName: customerName,
+                addressLine1: "API Error: See Remarks",
+                landmark: "", // Always provide this field
+                state: "",
+                district: "",
+                pin: "",
+                addressQuality: "VERY BAD"
+            };
+        }
+
+        function createAndDownloadCSV(rows, filename) {
+            // Updated header to match the output columns including LANDMARK
+            const header = "ORDER ID,CUSTOMER NAME,CUSTOMER RAW ADDRESS,CLEAN NAME,CLEAN ADDRESS LINE 1,LANDMARK,STATE,DISTRICT,PIN,REMARKS,QUALITY\n";
+            const csvContent = header + rows.join('\n');
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const downloadLink = document.getElementById('downloadLink');
+            downloadLink.href = URL.createObjectURL(blob);
+            downloadLink.classList.remove('hidden');
+        }
+
+        async function handleBulkVerification() {
+            const fileInput = document.getElementById('csvFileInput');
+            const processButton = document.getElementById('processButton');
+            const statusMessage = document.getElementById('status-message');
+            const progressBarFill = document.getElementById('progressBarFill');
+            const downloadLink = document.getElementById('downloadLink');
+
+            if (!fileInput.files.length) {
+                statusMessage.textContent = "Please select a CSV file first.";
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            // Reset UI
+            processButton.disabled = true;
+            fileInput.disabled = true;
+            downloadLink.classList.add('hidden');
+            progressBarFill.style.width = '0%';
+            statusMessage.textContent = 'Reading file...';
+            
+            reader.onload = async function(e) {
+                const text = e.target.result;
+                const addresses = parseCSV(text);
+                
+                if (addresses.length === 0) {
+                    statusMessage.textContent = "Error: No valid addresses found in CSV. Check format and required columns.";
+                    processButton.disabled = false;
+                    fileInput.disabled = false;
+                    return;
+                }
+
+                const totalAddresses = addresses.length;
+                let processedCount = 0;
+                const outputRows = [];
+
+                statusMessage.textContent = `Starting verification of ${totalAddresses} addresses...`;
+
+                for (const row of addresses) {
+                    const orderId = row['ORDER ID'] || '';
+                    const customerName = row['CUSTOMER NAME'] || '';
+                    const rawAddress = row['CUSTOMER RAW ADDRESS'] || '';
+
+                    let verificationResult;
+
+                    if (!rawAddress || rawAddress.trim() === "") { // Defensive check for missing address
+                        verificationResult = { status: "Error", remarks: "Missing raw address in CSV row.", addressQuality: "Poor", customerCleanName: customerName, addressLine1: "", landmark: "", state: "", district: "", pin: "" };
+                    } else {
+                        // FIX: Pass the correct parameters to fetchVerification
+                        verificationResult = await fetchVerification(rawAddress, customerName);
+                    }
+
+                    // Function to escape and quote CSV cell values
+                    const escapeAndQuote = (cell) => `\"${String(cell || '').replace(/\"/g, '\"\"')}\"`;
+
+                    // Format the output row
+                    const outputRow = [
+                        orderId,
+                        customerName,
+                        rawAddress,
+                        verificationResult.customerCleanName,
+                        verificationResult.addressLine1,
+                        verificationResult.landmark,
+                        verificationResult.state,
+                        verificationResult.district,
+                        verificationResult.pin,
+                        verificationResult.remarks,
+                        verificationResult.addressQuality
+                    ].map(escapeAndQuote).join(',');
+
+                    outputRows.push(outputRow);
+                    
+                    processedCount++;
+                    const progress = (processedCount / totalAddresses) * 100;
+                    progressBarFill.style.width = `${progress}%`;
+                    statusMessage.textContent = `Processing... ${processedCount} of ${totalAddresses} addresses completed.`;
+                }
+
+                statusMessage.textContent = `Processing complete! ${totalAddresses} addresses verified. Click 'Download Verified CSV'.`;
+                createAndDownloadCSV(outputRows, "verified_addresses.csv");
+                processButton.disabled = false;
+                fileInput.disabled = false;
+            };
+
+            reader.onerror = function() {
+                statusMessage.textContent = "Error reading file.";
+                processButton.disabled = false;
+                fileInput.disabled = false;
+            };
+
+            reader.readAsText(file);
+        }
+    </script>
 </body>
 </html>
