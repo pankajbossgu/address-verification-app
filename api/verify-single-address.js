@@ -14,11 +14,12 @@ const coreMeaningfulWords = [
     "tq", "job", "dist"
 ];
 
-// Combine both lists for comprehensive cleanup 🚨 FIX APPLIED HERE 🚨
+// Combine both lists for comprehensive cleanup
 const meaningfulWords = [...coreMeaningfulWords, ...testingKeywords];
 
 const meaninglessRegex = new RegExp(`\\b(?:${meaningfulWords.join('|')})\\b`, 'gi');
-const directionalKeywords = ['near', 'opposite', 'back side', 'front side', 'behind', 'opp'];
+// directionalKeywords array is used for the Landmark Prefix Logic
+const directionalKeywords = ['near', 'opposite', 'back side', 'front side', 'behind', 'opp']; 
 
 
 async function getIndiaPostData(pin) {
@@ -112,7 +113,7 @@ Your response must contain the following keys:
 5.  "DIST.": The official District from the PIN data.
 6.  "State": The official State from the PIN data.
 7.  "PIN": The 6-digit PIN code. Find and verify the correct PIN. If a PIN exists in the raw address but is incorrect, find the correct one and provide it.
-8.  "Landmark": A specific, named landmark (e.g., "Apollo Hospital"), not a generic type like "school". If multiple landmarks are present, list them comma-separated. Extract the landmark without any directional words like 'near', 'opposite', 'behind' etc., as this will be handled by the script.
+8.  "Landmark": A specific, named landmark (e.g., "Apollo Hospital"), not a generic type like "school". If multiple landmarks are present, list them comma-separated. **Extract the landmark without any directional words like 'near', 'opposite', 'behind' etc., as this will be handled by the script.**
 9.  "Remaining": A last resort for any text that does not fit into other fields. Clean this by removing meaningless words like 'job', 'raw', 'add-', 'tq', 'dist' and country, state, district, or PIN code.
 10. "FormattedAddress": This is the most important field. Based on your full analysis, create a single, clean, human-readable, and comprehensive shipping-ready address string. It should contain all specific details (H.no., Room No., etc.), followed by locality, street, colony, P.O., Tehsil, and District. DO NOT include the State or PIN in this string. Use commas to separate logical components. Do not invent or "hallucinate" information.
 11. "LocationType": Identify the type of location (e.g., "Village", "Town", "City", "Urban Area").
@@ -161,6 +162,7 @@ module.exports = async (req, res) => {
 
     try {
         const { address, customerName } = req.body;
+        let remarks = []; // Initialize remarks array
         
         if (!address) {
             return res.status(400).json({ status: "Error", error: "Address is required." });
@@ -188,26 +190,86 @@ module.exports = async (req, res) => {
             parsedData = JSON.parse(jsonText);
         } catch (e) {
             console.error("JSON Parsing Error:", e.message);
-            return res.status(500).json({ status: "Error", error: "Failed to parse Gemini output as JSON.", rawOutput: geminiResult.text });
+            remarks.push(`JSON parse failed. Raw Gemini Output: ${geminiResult.text.substring(0, 100)}...`);
+            // Continue with fallback data
+            parsedData = {
+                FormattedAddress: address.replace(meaninglessRegex, '').trim(),
+                Landmark: '',
+                State: '',
+                DIST: '',
+                PIN: initialPin,
+                AddressQuality: 'Very Bad',
+                Remaining: remarks[0], // Use the error as remaining
+            };
         }
 
-        // 3. Final cleanup and formatting
-        
-        // Extract and verify PIN again from parsed data
-        const finalPin = String(parsedData.PIN).match(/\b\d{6}\b/) ? parsedData.PIN : initialPin;
+        // 3. --- PIN VERIFICATION & CORRECTION LOGIC (Ported from Sheet Script) ---
+        let finalPin = String(parsedData.PIN).match(/\b\d{6}\b/) ? parsedData.PIN : initialPin;
+        let primaryPostOffice = postalData.PostOfficeList ? postalData.PostOfficeList[0] : {};
 
-        // Re-run India Post lookup if Gemini suggested a different PIN or if initial lookup failed
-        if (finalPin && finalPin !== initialPin) {
-            const finalPostalData = await getIndiaPostData(finalPin);
-            if (finalPostalData.PinStatus === 'Success') {
-                postalData = finalPostalData;
+        if (finalPin) {
+            // Re-run India Post lookup if PIN is different or original lookup failed
+            if (postalData.PinStatus !== 'Success' || (initialPin && finalPin !== initialPin)) {
+                const aiPostalData = await getIndiaPostData(finalPin);
+
+                if (aiPostalData.PinStatus === 'Success') {
+                    // AI PIN is valid, use its data and update Post Office details
+                    postalData = aiPostalData;
+                    primaryPostOffice = postalData.PostOfficeList[0] || {};
+                    
+                    // Add PIN correction remarks
+                    if (initialPin && initialPin !== finalPin) {
+                        remarks.push(`Wrong PIN (${initialPin}) corrected to (${finalPin}).`);
+                    } else if (!initialPin) {
+                        remarks.push(`Correct PIN (${finalPin}) added by AI.`);
+                    }
+                } else {
+                    // AI PIN also failed API check, warn the user and revert PIN if possible
+                    remarks.push(`Warning: AI-provided PIN (${finalPin}) not verified by API.`);
+                    finalPin = initialPin; // Revert to original, which might be valid or invalid
+                }
+            } else if (initialPin && postalData.PinStatus === 'Success') {
+                remarks.push(`PIN (${initialPin}) verified successfully.`);
+            }
+        } else {
+            // If neither original nor AI could find a valid PIN
+            remarks.push("Warning: PIN not found after verification attempts. Manual check needed.");
+            finalPin = initialPin || null; // Fallback to initialPin even if invalid, for user reference
+        }
+
+
+        // 4. --- Directional Prefix Logic for Landmark (Ported from Sheet Script) ---
+        let landmarkValue = parsedData.Landmark || '';
+        const originalAddressLower = address.toLowerCase();
+        let finalLandmark = '';
+
+        if (landmarkValue.toString().trim() !== '') {
+            const foundDirectionalWord = directionalKeywords.find(keyword => originalAddressLower.includes(keyword));
+            
+            if (foundDirectionalWord) {
+                // Find the original spelling of the directional word in the raw address
+                const originalDirectionalWordMatch = address.match(new RegExp(`\\b${foundDirectionalWord.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i'));
+                const originalDirectionalWord = originalDirectionalWordMatch ? originalDirectionalWordMatch[0] : foundDirectionalWord;
+                
+                // Capitalize the first letter for clean display
+                const prefixedWord = originalDirectionalWord.charAt(0).toUpperCase() + originalDirectionalWord.slice(1);
+                
+                finalLandmark = `${prefixedWord} ${landmarkValue.toString().trim()}`;
+            } else {
+                // If no directional word is found, use "Near" as the default
+                finalLandmark = `Near ${landmarkValue.toString().trim()}`;
             }
         }
+        
+        // Final Remarks cleanup and addition
+        if (parsedData.Remaining && parsedData.Remaining.trim() !== '') {
+            remarks.push(`Remaining/Ambiguous Text: ${parsedData.Remaining.trim()}`);
+        } else if (remarks.length === 0) {
+            remarks.push('Address verified and formatted successfully.');
+        }
 
-        // Select the first post office data for final output
-        const primaryPostOffice = postalData.PostOfficeList ? postalData.PostOfficeList[0] : {};
 
-        // 4. Construct the Final JSON Response
+        // 5. Construct the Final JSON Response
         const finalResponse = {
             status: "Success",
             customerRawName: customerName,
@@ -215,14 +277,14 @@ module.exports = async (req, res) => {
             
             // Core Address Components
             addressLine1: parsedData.FormattedAddress || address.replace(meaninglessRegex, '').trim() || '',
-            landmark: parsedData.Landmark || '',
+            landmark: finalLandmark, // <<< UPDATED: Use the new variable with the prefix
             
             // Geographic Components (Prioritize India Post verification)
             postOffice: primaryPostOffice.Name || parsedData['P.O.'] || '',
             tehsil: primaryPostOffice.Taluk || parsedData.Tehsil || '',
             district: primaryPostOffice.District || parsedData['DIST.'] || '',
             state: primaryPostOffice.State || parsedData.State || '',
-            pin: finalPin || parsedData.PIN || null,
+            pin: finalPin, // <<< UPDATED: Use the corrected/verified PIN
 
             // Quality/Verification Metrics
             addressQuality: parsedData.AddressQuality || 'Medium',
@@ -230,7 +292,7 @@ module.exports = async (req, res) => {
             locationSuitability: parsedData.LocationSuitability || 'Unknown',
             
             // Remarks
-            remarks: parsedData.Remaining || 'Address verified and formatted successfully.',
+            remarks: remarks.join('; ').trim(), // <<< UPDATED: Use the combined array of remarks
         };
 
         return res.status(200).json(finalResponse);
