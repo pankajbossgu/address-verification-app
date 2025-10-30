@@ -3,6 +3,7 @@ const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto'); 
 
 // Use the Service Role Key for Admin functions (high privilege)
+// This key should NEVER be used in frontend code.
 const supabase = createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY 
@@ -10,10 +11,12 @@ const supabase = createClient(
 
 module.exports = async (req, res) => {
     // 1. SECURITY: Check Admin Secret Header
+    // This protects the endpoint from public access.
     if (req.headers['x-admin-secret'] !== process.env.ADMIN_SECRET_KEY) {
         return res.status(401).json({ error: 'Unauthorized Admin Access. Invalid Secret Key.' });
     }
-    
+
+    // Must be a POST request and contain data
     if (req.method !== 'POST' || !req.body) {
         return res.status(405).json({ error: 'Method Not Allowed or Missing Body' });
     }
@@ -24,7 +27,8 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: 'Missing user_id or plan_limit in request body.' });
     }
     
-    // 3. Generate a secure, unique API Key
+    // 3. Generate a secure, unique API Key for the client
+    // Prefix the key for easy identification (sk_prod_ for secret key, production)
     const apiKey = `sk_prod_${crypto.randomBytes(16).toString('hex')}`;
 
     // 4. Insert client into the database
@@ -43,10 +47,11 @@ module.exports = async (req, res) => {
         return res.status(500).json({ error: 'Database Write Error', details: error.message });
     }
 
-    // 5. Success: Return the key
+    // 5. Success: Return the key to the admin (YOU)
     return res.status(200).json({ 
         status: 'Client Created Successfully', 
         client_id: user_id, 
         new_api_key: apiKey,
+        message: 'Send this new_api_key to the client.'
     });
 };
