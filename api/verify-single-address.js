@@ -190,7 +190,8 @@ module.exports = async (req, res) => {
             parsedData = JSON.parse(jsonText);
         } catch (e) {
             console.error("JSON Parsing Error:", e.message);
-            remarks.push(`JSON parse failed. Raw Gemini Output: ${geminiResult.text.substring(0, 100)}...`);
+            // VITAL: Add critical alert for JSON failure
+            remarks.push(`CRITICAL_ALERT: JSON parse failed. Raw Gemini Output: ${geminiResult.text.substring(0, 50)}...`);
             // Continue with fallback data
             parsedData = {
                 FormattedAddress: address.replace(meaninglessRegex, '').trim(),
@@ -203,7 +204,7 @@ module.exports = async (req, res) => {
             };
         }
 
-        // 3. --- PIN VERIFICATION & CORRECTION LOGIC (Ported from Sheet Script) ---
+        // 3. --- PIN VERIFICATION & CORRECTION LOGIC ---
         let finalPin = String(parsedData.PIN).match(/\b\d{6}\b/) ? parsedData.PIN : initialPin;
         let primaryPostOffice = postalData.PostOfficeList ? postalData.PostOfficeList[0] : {};
 
@@ -219,13 +220,13 @@ module.exports = async (req, res) => {
                     
                     // Add PIN correction remarks
                     if (initialPin && initialPin !== finalPin) {
-                        remarks.push(`Wrong PIN (${initialPin}) corrected to (${finalPin}).`);
+                        remarks.push(`CRITICAL_ALERT: Wrong PIN (${initialPin}) corrected to (${finalPin}).`);
                     } else if (!initialPin) {
                         remarks.push(`Correct PIN (${finalPin}) added by AI.`);
                     }
                 } else {
                     // AI PIN also failed API check, warn the user and revert PIN if possible
-                    remarks.push(`Warning: AI-provided PIN (${finalPin}) not verified by API.`);
+                    remarks.push(`CRITICAL_ALERT: AI-provided PIN (${finalPin}) not verified by API.`);
                     finalPin = initialPin; // Revert to original, which might be valid or invalid
                 }
             } else if (initialPin && postalData.PinStatus === 'Success') {
@@ -233,12 +234,17 @@ module.exports = async (req, res) => {
             }
         } else {
             // If neither original nor AI could find a valid PIN
-            remarks.push("Warning: PIN not found after verification attempts. Manual check needed.");
+            remarks.push("CRITICAL_ALERT: PIN not found after verification attempts. Manual check needed.");
             finalPin = initialPin || null; // Fallback to initialPin even if invalid, for user reference
+        }
+        
+        // 3.5. --- Short Address Check ---
+        if (parsedData.FormattedAddress && parsedData.FormattedAddress.length < 35 && parsedData.AddressQuality !== 'Very Good' && parsedData.AddressQuality !== 'Good') {
+             remarks.push(`CRITICAL_ALERT: Formatted address is short (${parsedData.FormattedAddress.length} chars). Manual verification recommended.`);
         }
 
 
-        // 4. --- Directional Prefix Logic for Landmark (Ported from Sheet Script) ---
+        // 4. --- Directional Prefix Logic for Landmark ---
         let landmarkValue = parsedData.Landmark || '';
         const originalAddressLower = address.toLowerCase();
         let finalLandmark = '';
@@ -277,14 +283,14 @@ module.exports = async (req, res) => {
             
             // Core Address Components
             addressLine1: parsedData.FormattedAddress || address.replace(meaninglessRegex, '').trim() || '',
-            landmark: finalLandmark, // <<< UPDATED: Use the new variable with the prefix
+            landmark: finalLandmark, // <<< UPDATED
             
             // Geographic Components (Prioritize India Post verification)
             postOffice: primaryPostOffice.Name || parsedData['P.O.'] || '',
             tehsil: primaryPostOffice.Taluk || parsedData.Tehsil || '',
             district: primaryPostOffice.District || parsedData['DIST.'] || '',
             state: primaryPostOffice.State || parsedData.State || '',
-            pin: finalPin, // <<< UPDATED: Use the corrected/verified PIN
+            pin: finalPin, // <<< UPDATED
 
             // Quality/Verification Metrics
             addressQuality: parsedData.AddressQuality || 'Medium',
@@ -292,7 +298,7 @@ module.exports = async (req, res) => {
             locationSuitability: parsedData.LocationSuitability || 'Unknown',
             
             // Remarks
-            remarks: remarks.join('; ').trim(), // <<< UPDATED: Use the combined array of remarks
+            remarks: remarks.join('; ').trim(), // <<< UPDATED: Send as a single string
         };
 
         return res.status(200).json(finalResponse);
