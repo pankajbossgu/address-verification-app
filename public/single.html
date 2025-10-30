@@ -119,11 +119,11 @@
             if (element) {
                 element.textContent = text;
                 if (isError) {
-                    element.classList.remove('bg-blue-50', 'text-primary-blue');
-                    element.classList.add('bg-red-50', 'text-red-700');
+                    element.classList.remove('bg-blue-50', 'text-primary-blue', 'border-blue-200');
+                    element.classList.add('bg-red-50', 'text-red-700', 'border-red-200');
                 } else {
-                    element.classList.remove('bg-red-50', 'text-red-700');
-                    element.classList.add('bg-blue-50', 'text-primary-blue');
+                    element.classList.remove('bg-red-50', 'text-red-700', 'border-red-200');
+                    element.classList.add('bg-blue-50', 'text-primary-blue', 'border-blue-200');
                 }
             }
         }
@@ -194,7 +194,7 @@
                 const verificationResult = await fetchVerification(rawAddress, customerName);
 
                 if (verificationResult.status === "Error") {
-                     // Display the error clearly
+                    // Display the error clearly
                     showMessage('loading-message', `Verification Error: ${verificationResult.error || 'Unknown Error'}`, true);
                     return;
                 }
