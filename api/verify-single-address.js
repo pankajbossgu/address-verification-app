@@ -11,7 +11,7 @@ const coreMeaningfulWords = [
     "chd", "chd-", "chandigarh", "chandigarh-", "chandigarh", "west", "sector", "sector-",
     "house", "no", "no#", "house no", "house no#", "floor", "first", "first floor",
     "majra", "colony", "dadu", "dadu majra", "shop", "wine", "wine shop", "house", "number",
-    "tq", "job", "dist"
+    "tq", "job", "dist", "vpo" // <<< FIX: Added VPO for local cleanup
 ];
 
 // Combine both lists for comprehensive cleanup
@@ -21,8 +21,8 @@ const meaninglessRegex = new RegExp(`\\b(?:${meaningfulWords.join('|')})\\b`, 'g
 // directionalKeywords array is used for the Landmark Prefix Logic
 const directionalKeywords = ['near', 'opposite', 'back side', 'front side', 'behind', 'opp']; 
 
-// Keywords for Component Leakage Check
-const leakageKeywords = ['road', 'street', 'lane', 'colony', 'apartment', 'bldg', 'area', 'nagar', 'vihar', 'marg'];
+// Keywords for Component Leakage Check (Structural Fix)
+const leakageKeywords = ['road', 'street', 'lane', 'colony', 'apartment', 'bldg', 'area', 'nagar', 'vihar', 'marg', 'vpo', 'po', 'tq']; 
 const leakageRegex = new RegExp(`\\b(?:${leakageKeywords.join('|')})\\b`, 'gi');
 
 
@@ -111,14 +111,14 @@ function buildGeminiPrompt(originalAddress, postalData) {
 
 Your response must contain the following keys:
 1.  "H.no.", "Flat No.", "Plot No.", "Room No.", "Building No.", "Block No.", "Ward No.", "Gali No.", "Zone No.": Extract only the number or alphanumeric sequence (e.g., '1-26', 'A/25', '10'). Set to null if not found.
-2.  "Colony", "Street", "Locality", "Building Name", "House Name", "Floor": Extract the name.
+2.  "Colony", "Street", "Locality", "Building Name", "House Name", "Floor": Extract the name. **Crucially, if the raw address contains V.P.O. (Village and Post Office), extract the village/town name associated with it (e.g., 'Bujrak' from 'V.P.O. Bujrak') and incorporate the village name here or in the 'FormattedAddress'.**
 3.  "P.O.": The official Post Office name from the PIN data. Prepend "P.O." to the name. Example: "P.O. Boduppal".
 4.  "Tehsil": The official Tehsil/SubDistrict from the PIN data. Prepend "Tehsil". Example: "Tehsil Pune".
 5.  "DIST.": The official District from the PIN data.
 6.  "State": The official State from the PIN data.
 7.  "PIN": The 6-digit PIN code. Find and verify the correct PIN. If a PIN exists in the raw address but is incorrect, find the correct one and provide it.
-8.  "Landmark": A specific, named landmark (e.g., "Apollo Hospital"), not a generic type like "school". If multiple landmarks are present, list them comma-separated. **Extract the landmark without any directional words like 'near', 'opposite', 'behind' etc., as this will be handled by the script.**
-9.  "Remaining": A last resort for any text that does not fit into other fields. Clean this by removing meaningless words like 'job', 'raw', 'add-', 'tq', 'dist' and country, state, district, or PIN code.
+8.  "Landmark": A specific, named landmark (e.g., "Apollo Hospital"), not a generic type like "school". If multiple landmarks are present, list them comma-separated. Extract the landmark without any directional words like 'near', 'opposite', 'behind' etc., as this will be handled by the script.
+9.  "Remaining": A last resort for any text that does not fit into other fields. Clean this by removing meaningless words like 'job', 'raw', 'add-', 'tq', 'dist' and country, state, district, or PIN code. **Ensure all recognized Indian address and postal abbreviations (like V.P.O., P.O., T.Q.) are parsed out and ONLY truly ambiguous, non-address components remain here.**
 10. "FormattedAddress": This is the most important field. Based on your full analysis, create a single, clean, human-readable, and comprehensive shipping-ready address string. **Prioritize components in the typical delivery order: [Premise/H.No./Flat No.] followed by [Street/Colony/Locality] and then [Town/City/P.O./Tehsil]**. DO NOT include the State or PIN in this string. Use commas to separate logical components. Do not invent or "hallucinate" information.
 11. "LocationType": Identify the type of location (e.g., "Village", "Town", "City", "Urban Area").
 12. "AddressQuality": Analyze the address completeness and clarity for shipping. Categorize it as one of the following: Very Good, Good, Medium, Bad, or Very Bad.
