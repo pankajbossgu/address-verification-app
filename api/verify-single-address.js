@@ -18,9 +18,8 @@ const coreMeaningfulWords = [
 const meaningfulWords = [...coreMeaningfulWords, ...testingKeywords];
 
 const meaninglessRegex = new RegExp(`\\b(?:${meaningfulWords.join('|')})\\b`, 'gi');
+// directionalKeywords array is used for the Landmark Prefix Logic
 const directionalKeywords = ['near', 'opposite', 'back side', 'front side', 'behind', 'opp']; 
-
-// NOTE: Component leakage checks are NOT included in this version.
 
 
 async function getIndiaPostData(pin) {
@@ -104,8 +103,7 @@ function extractPin(address) {
 }
 
 function buildGeminiPrompt(originalAddress, postalData) {
-    // This is the simplified, original prompt without advanced wording/structure/correction instructions.
-    let basePrompt = `You are an expert Indian address verifier and formatter. Your task is to process a raw address, perform a thorough analysis, and provide a comprehensive response in a single JSON object. Provide all responses in English only. Strictly translate all extracted address components to English. Use your advanced knowledge to identify and remove any duplicate address components that are present consecutively.
+    let basePrompt = `You are an expert Indian address verifier and formatter. Your task is to process a raw address, perform a thorough analysis, and provide a comprehensive response in a single JSON object. Provide all responses in English only. Strictly translate all extracted address components to English. Correct all common spelling and phonetic errors in the provided address, such as "rd" to "Road", "nager" to "Nagar", and "nd" to "2nd". Analyze common short forms and phonetic spellings, such as "lean" for "Lane", and use your best judgment to correct them. Be strict about ensuring the output is a valid, single, and complete address for shipping. Use your advanced knowledge to identify and remove any duplicate address components that are present consecutively (e.g., 'Gandhi Street Gandhi Street' should be 'Gandhi Street').
 
 Your response must contain the following keys:
 1.  "H.no.", "Flat No.", "Plot No.", "Room No.", "Building No.", "Block No.", "Ward No.", "Gali No.", "Zone No.": Extract only the number or alphanumeric sequence (e.g., '1-26', 'A/25', '10'). Set to null if not found.
@@ -115,9 +113,9 @@ Your response must contain the following keys:
 5.  "DIST.": The official District from the PIN data.
 6.  "State": The official State from the PIN data.
 7.  "PIN": The 6-digit PIN code. Find and verify the correct PIN. If a PIN exists in the raw address but is incorrect, find the correct one and provide it.
-8.  "Landmark": A specific, named landmark (e.g., "Apollo Hospital"). List them comma-separated.
+8.  "Landmark": A specific, named landmark (e.g., "Apollo Hospital"), not a generic type like "school". If multiple landmarks are present, list them comma-separated. **Extract the landmark without any directional words like 'near', 'opposite', 'behind' etc., as this will be handled by the script.**
 9.  "Remaining": A last resort for any text that does not fit into other fields. Clean this by removing meaningless words like 'job', 'raw', 'add-', 'tq', 'dist' and country, state, district, or PIN code.
-10. "FormattedAddress": Create a single, clean, human-readable, and comprehensive shipping-ready address string. DO NOT include the State or PIN in this string. Use commas to separate logical components. Do not invent or "hallucinate" information.
+10. "FormattedAddress": This is the most important field. Based on your full analysis, create a single, clean, human-readable, and comprehensive shipping-ready address string. It should contain all specific details (H.no., Room No., etc.), followed by locality, street, colony, P.O., Tehsil, and District. DO NOT include the State or PIN in this string. Use commas to separate logical components. Do not invent or "hallucinate" information.
 11. "LocationType": Identify the type of location (e.g., "Village", "Town", "City", "Urban Area").
 12. "AddressQuality": Analyze the address completeness and clarity for shipping. Categorize it as one of the following: Very Good, Good, Medium, Bad, or Very Bad.
 13. "LocationSuitability": Analyze the location based on its State, District, and PIN to determine courier-friendliness in India. Categorize it as one of the following: Prime Location, Tier 1 & 2 Cities, Remote/Difficult Location, or Non-Serviceable Location.
@@ -164,7 +162,7 @@ module.exports = async (req, res) => {
 
     try {
         const { address, customerName } = req.body;
-        let remarks = []; 
+        let remarks = []; // Initialize remarks array
         
         if (!address) {
             return res.status(400).json({ status: "Error", error: "Address is required." });
@@ -192,7 +190,7 @@ module.exports = async (req, res) => {
             parsedData = JSON.parse(jsonText);
         } catch (e) {
             console.error("JSON Parsing Error:", e.message);
-            remarks.push(`JSON parse failed. Raw Gemini Output: ${geminiResult.text.substring(0, 50)}...`);
+            remarks.push(`CRITICAL_ALERT: JSON parse failed. Raw Gemini Output: ${geminiResult.text.substring(0, 50)}...`);
             // Continue with fallback data
             parsedData = {
                 FormattedAddress: address.replace(meaninglessRegex, '').trim(),
@@ -205,28 +203,142 @@ module.exports = async (req, res) => {
             };
         }
 
-        // 3. --- PIN VERIFICATION & CORRECTION LOGIC (Basic) ---
+        // 3. --- PIN VERIFICATION & CORRECTION LOGIC ---
         let finalPin = String(parsedData.PIN).match(/\b\d{6}\b/) ? parsedData.PIN : initialPin;
         let primaryPostOffice = postalData.PostOfficeList ? postalData.PostOfficeList[0] : {};
 
+        // Store initial successful postal data (if any) before potential overwrite by AI PIN check
+        let initialPostalDataSuccess = postalData.PinStatus === 'Success' ? postalData : null;
         
         if (finalPin) {
-            // Re-run India Post lookup only if original lookup failed or PIN changed
+            // Re-run India Post lookup if PIN is different or original lookup failed
             if (postalData.PinStatus !== 'Success' || (initialPin && finalPin !== initialPin)) {
                 const aiPostalData = await getIndiaPostData(finalPin);
 
                 if (aiPostalData.PinStatus === 'Success') {
-                    // AI PIN is valid, use its data
+                    // AI PIN is valid, use its data and update Post Office details
                     postalData = aiPostalData;
                     primaryPostOffice = postalData.PostOfficeList[0] || {};
+                    
+                    // Add PIN correction remarks
+                    if (initialPin && initialPin !== finalPin) {
+                        remarks.push(`CRITICAL_ALERT: Wrong PIN (${initialPin}) corrected to (${finalPin}).`);
+                    } else if (!initialPin) {
+                        remarks.push(`Correct PIN (${finalPin}) added by AI.`);
+                    }
+                } else {
+                    // AI PIN also failed API check, warn the user and revert PIN if possible
+                    remarks.push(`CRITICAL_ALERT: AI-provided PIN (${finalPin}) not verified by API.`);
+                    finalPin = initialPin; // Revert to original, which might be valid or invalid
+                }
+            } else if (initialPin && postalData.PinStatus === 'Success') {
+                remarks.push(`PIN (${initialPin}) verified successfully.`);
+            }
+        } else {
+            // If neither original nor AI could find a valid PIN
+            remarks.push("CRITICAL_ALERT: PIN not found after verification attempts. Manual check needed.");
+            finalPin = initialPin || null; // Fallback to initialPin even if invalid, for user reference
+        }
+        
+        // --- 4. ADVANCED DEEP THINKING LOGICS ---
+        
+        const apiState = primaryPostOffice.State ? primaryPostOffice.State.toLowerCase() : '';
+        const apiDistrict = primaryPostOffice.District ? primaryPostOffice.District.toLowerCase() : '';
+        const rawAddressLower = address.toLowerCase();
+        
+        // 4.1. Semantic PIN Discrepancy Check (State/District Mismatch)
+        if (postalData.PinStatus === 'Success') {
+            const isStateMentionedInRaw = apiState && rawAddressLower.includes(apiState.split(' ')[0].toLowerCase());
+            const isDistrictMentionedInRaw = apiDistrict && rawAddressLower.includes(apiDistrict.split(' ')[0].toLowerCase());
+
+            // Get State/District names mentioned by the AI from the raw address
+            const aiState = parsedData.State ? parsedData.State.toLowerCase() : '';
+            const aiDistrict = parsedData['DIST.'] ? parsedData['DIST.'] || parsedData['Tehsil'] : '';
+            const aiDistrictLower = aiDistrict ? aiDistrict.toLowerCase() : '';
+
+            // Check if the AI's extracted district (from raw text) conflicts with the API's verified district for the PIN
+            if (apiDistrict && aiDistrictLower && apiDistrict !== aiDistrictLower) {
+                // Only flag if the AI's district is explicitly in the raw address
+                if (rawAddressLower.includes(aiDistrictLower.split(' ')[0])) {
+                     remarks.push(`CRITICAL_ALERT: Semantic District Mismatch! PIN (${finalPin}) is for '${apiDistrict}' but address mentions '${aiDistrict}'.`);
+                }
+            }
+            
+            // Check for State mismatch (less common but critical)
+            if (apiState && aiState && apiState !== aiState) {
+                if (rawAddressLower.includes(aiState.split(' ')[0])) {
+                    remarks.push(`CRITICAL_ALERT: Semantic State Mismatch! PIN (${finalPin}) is for '${apiState}' but address mentions '${aiState}'.`);
                 }
             }
         }
         
-        // --- 4. No advanced checks in this version ---
+        // 4.2. Landmark/P.O. Conflict Check (AI vs API)
+        if (postalData.PinStatus === 'Success' && primaryPostOffice.Name) {
+            const apiPOName = primaryPostOffice.Name.toLowerCase();
+            const landmarkValueLower = (parsedData.Landmark || '').toLowerCase();
+            const formattedAddressLower = (parsedData.FormattedAddress || '').toLowerCase();
 
-        // 5. Construct the Final JSON Response
-        // NOTE: Landmark prefix logic is NOT included in this version.
+            // Flag if the AI extracts a Post Office/Locality that is close to the API's P.O. name but still different
+            if (formattedAddressLower.includes(apiPOName) || landmarkValueLower.includes(apiPOName)) {
+                 remarks.push(`Verified: Locality or Landmark found in official Post Office list (${primaryPostOffice.Name}).`);
+            } else if (formattedAddressLower.length > 20 && !formattedAddressLower.includes(apiDistrict) && !formattedAddressLower.includes(apiState)) {
+                // This is a weak signal, but suggests the address is about a different locality
+                // It's a "deep thinking" flag for manual review
+                remarks.push(`Deep Check: Formatted address components do not strongly reference the official P.O. (${primaryPostOffice.Name}).`);
+            }
+        }
+
+        // 4.3. Address Component Density Check & Short Address Check
+        const meaningfulComponents = [
+            parsedData['H.no.'], parsedData['Flat No.'], parsedData['Plot No.'],
+            parsedData.Colony, parsedData.Street, parsedData.Locality, 
+            parsedData['Building Name'], parsedData.Landmark, parsedData.Remaining
+        ].filter(c => c && String(c).trim() !== '').length;
+        
+        const totalAddressLength = (parsedData.FormattedAddress || '').length + (parsedData.Landmark || '').length;
+
+        // Short address check (from previous step)
+        if (totalAddressLength < 35 && parsedData.AddressQuality !== 'Very Good' && parsedData.AddressQuality !== 'Good') {
+             remarks.push(`CRITICAL_ALERT: Formatted address is short (${totalAddressLength} chars). Manual verification recommended.`);
+        }
+        
+        // Density check (e.g., is the address just "House 1, Street")
+        if (totalAddressLength > 20 && meaningfulComponents < 3) {
+            remarks.push(`CRITICAL_ALERT: Low Component Density. Only ${meaningfulComponents} specific components found (H.No., Street, Colony, Landmark, etc.).`);
+        }
+
+
+        // 5. --- Directional Prefix Logic for Landmark ---
+        let landmarkValue = parsedData.Landmark || '';
+        let finalLandmark = '';
+
+        if (landmarkValue.toString().trim() !== '') {
+            const foundDirectionalWord = directionalKeywords.find(keyword => rawAddressLower.includes(keyword));
+            
+            if (foundDirectionalWord) {
+                // Find the original spelling of the directional word in the raw address
+                const originalDirectionalWordMatch = address.match(new RegExp(`\\b${foundDirectionalWord.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i'));
+                const originalDirectionalWord = originalDirectionalWordMatch ? originalDirectionalWordMatch[0] : foundDirectionalWord;
+                
+                // Capitalize the first letter for clean display
+                const prefixedWord = originalDirectionalWord.charAt(0).toUpperCase() + originalDirectionalWord.slice(1);
+                
+                finalLandmark = `${prefixedWord} ${landmarkValue.toString().trim()}`;
+            } else {
+                // If no directional word is found, use "Near" as the default
+                finalLandmark = `Near ${landmarkValue.toString().trim()}`;
+            }
+        }
+        
+        // Final Remarks cleanup and addition
+        if (parsedData.Remaining && parsedData.Remaining.trim() !== '' && !parsedData.Remaining.includes('JSON parse failed')) {
+            remarks.push(`Remaining/Ambiguous Text: ${parsedData.Remaining.trim()}`);
+        } else if (remarks.length === 0) {
+            remarks.push('Address verified and formatted successfully.');
+        }
+
+
+        // 6. Construct the Final JSON Response
         const finalResponse = {
             status: "Success",
             customerRawName: customerName,
@@ -234,22 +346,22 @@ module.exports = async (req, res) => {
             
             // Core Address Components
             addressLine1: parsedData.FormattedAddress || address.replace(meaninglessRegex, '').trim() || '',
-            landmark: parsedData.Landmark || '',
+            landmark: finalLandmark, // <<< UPDATED
             
             // Geographic Components (Prioritize India Post verification)
             postOffice: primaryPostOffice.Name || parsedData['P.O.'] || '',
             tehsil: primaryPostOffice.Taluk || parsedData.Tehsil || '',
             district: primaryPostOffice.District || parsedData['DIST.'] || '',
             state: primaryPostOffice.State || parsedData.State || '',
-            pin: finalPin || parsedData.PIN || null,
+            pin: finalPin, // <<< UPDATED
 
             // Quality/Verification Metrics
             addressQuality: parsedData.AddressQuality || 'Medium',
             locationType: parsedData.LocationType || 'Unknown',
             locationSuitability: parsedData.LocationSuitability || 'Unknown',
             
-            // Remarks (Simply returns the Remaining text from the AI)
-            remarks: parsedData.Remaining || 'Address verified and formatted successfully.',
+            // Remarks
+            remarks: remarks.join('; ').trim(), // <<< UPDATED: Send as a single string
         };
 
         return res.status(200).json(finalResponse);
