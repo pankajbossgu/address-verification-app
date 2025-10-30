@@ -186,10 +186,11 @@
                 }
             }
             // Return a predictable structure even on network/fetch errors to prevent CSV output breaks
+            // *** CRITICAL_ALERT prefix added to remarks here for network errors ***
             return { 
                 status: "Error", 
                 error: `Verification failed after ${maxRetries} attempts.`,
-                remarks: `Error: ${lastError ? lastError.message : 'Unknown Network Error'}`,
+                remarks: `CRITICAL_ALERT: Bulk API Error: ${lastError ? lastError.message : 'Unknown Network Error'}`,
                 customerCleanName: customerName,
                 addressLine1: "API Error: See Remarks",
                 landmark: "", // Always provide this field
@@ -258,7 +259,8 @@
                     let verificationResult;
 
                     if (!rawAddress || rawAddress.trim() === "") { // Defensive check for missing address
-                        verificationResult = { status: "Error", remarks: "Missing raw address in CSV row.", addressQuality: "Poor", customerCleanName: customerName, addressLine1: "", landmark: "", state: "", district: "", pin: "" };
+                        // *** CRITICAL_ALERT prefix added to remarks here for missing addresses ***
+                        verificationResult = { status: "Error", remarks: "CRITICAL_ALERT: Missing raw address in CSV row.", addressQuality: "Very Bad", customerCleanName: customerName, addressLine1: "", landmark: "", state: "", district: "", pin: "" };
                     } else {
                         // FIX: Pass the correct parameters to fetchVerification
                         verificationResult = await fetchVerification(rawAddress, customerName);
