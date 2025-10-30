@@ -190,7 +190,7 @@ module.exports = async (req, res) => {
             parsedData = JSON.parse(jsonText);
         } catch (e) {
             console.error("JSON Parsing Error:", e.message);
-            remarks.push(`CRITICAL_ALERT: JSON parse failed. Raw Gemini Output: ${geminiResult.text.substring(0, 50)}...`);
+            remarks.push(`JSON parse failed. Raw Gemini Output: ${geminiResult.text.substring(0, 100)}...`);
             // Continue with fallback data
             parsedData = {
                 FormattedAddress: address.replace(meaninglessRegex, '').trim(),
@@ -203,13 +203,10 @@ module.exports = async (req, res) => {
             };
         }
 
-        // 3. --- PIN VERIFICATION & CORRECTION LOGIC ---
+        // 3. --- PIN VERIFICATION & CORRECTION LOGIC (Ported from Sheet Script) ---
         let finalPin = String(parsedData.PIN).match(/\b\d{6}\b/) ? parsedData.PIN : initialPin;
         let primaryPostOffice = postalData.PostOfficeList ? postalData.PostOfficeList[0] : {};
 
-        // Store initial successful postal data (if any) before potential overwrite by AI PIN check
-        let initialPostalDataSuccess = postalData.PinStatus === 'Success' ? postalData : null;
-        
         if (finalPin) {
             // Re-run India Post lookup if PIN is different or original lookup failed
             if (postalData.PinStatus !== 'Success' || (initialPin && finalPin !== initialPin)) {
@@ -222,13 +219,13 @@ module.exports = async (req, res) => {
                     
                     // Add PIN correction remarks
                     if (initialPin && initialPin !== finalPin) {
-                        remarks.push(`CRITICAL_ALERT: Wrong PIN (${initialPin}) corrected to (${finalPin}).`);
+                        remarks.push(`Wrong PIN (${initialPin}) corrected to (${finalPin}).`);
                     } else if (!initialPin) {
                         remarks.push(`Correct PIN (${finalPin}) added by AI.`);
                     }
                 } else {
                     // AI PIN also failed API check, warn the user and revert PIN if possible
-                    remarks.push(`CRITICAL_ALERT: AI-provided PIN (${finalPin}) not verified by API.`);
+                    remarks.push(`Warning: AI-provided PIN (${finalPin}) not verified by API.`);
                     finalPin = initialPin; // Revert to original, which might be valid or invalid
                 }
             } else if (initialPin && postalData.PinStatus === 'Success') {
@@ -236,84 +233,18 @@ module.exports = async (req, res) => {
             }
         } else {
             // If neither original nor AI could find a valid PIN
-            remarks.push("CRITICAL_ALERT: PIN not found after verification attempts. Manual check needed.");
+            remarks.push("Warning: PIN not found after verification attempts. Manual check needed.");
             finalPin = initialPin || null; // Fallback to initialPin even if invalid, for user reference
         }
-        
-        // --- 4. ADVANCED DEEP THINKING LOGICS ---
-        
-        const apiState = primaryPostOffice.State ? primaryPostOffice.State.toLowerCase() : '';
-        const apiDistrict = primaryPostOffice.District ? primaryPostOffice.District.toLowerCase() : '';
-        const rawAddressLower = address.toLowerCase();
-        
-        // 4.1. Semantic PIN Discrepancy Check (State/District Mismatch)
-        if (postalData.PinStatus === 'Success') {
-            const isStateMentionedInRaw = apiState && rawAddressLower.includes(apiState.split(' ')[0].toLowerCase());
-            const isDistrictMentionedInRaw = apiDistrict && rawAddressLower.includes(apiDistrict.split(' ')[0].toLowerCase());
-
-            // Get State/District names mentioned by the AI from the raw address
-            const aiState = parsedData.State ? parsedData.State.toLowerCase() : '';
-            const aiDistrict = parsedData['DIST.'] ? parsedData['DIST.'] || parsedData['Tehsil'] : '';
-            const aiDistrictLower = aiDistrict ? aiDistrict.toLowerCase() : '';
-
-            // Check if the AI's extracted district (from raw text) conflicts with the API's verified district for the PIN
-            if (apiDistrict && aiDistrictLower && apiDistrict !== aiDistrictLower) {
-                // Only flag if the AI's district is explicitly in the raw address
-                if (rawAddressLower.includes(aiDistrictLower.split(' ')[0])) {
-                     remarks.push(`CRITICAL_ALERT: Semantic District Mismatch! PIN (${finalPin}) is for '${apiDistrict}' but address mentions '${aiDistrict}'.`);
-                }
-            }
-            
-            // Check for State mismatch (less common but critical)
-            if (apiState && aiState && apiState !== aiState) {
-                if (rawAddressLower.includes(aiState.split(' ')[0])) {
-                    remarks.push(`CRITICAL_ALERT: Semantic State Mismatch! PIN (${finalPin}) is for '${apiState}' but address mentions '${aiState}'.`);
-                }
-            }
-        }
-        
-        // 4.2. Landmark/P.O. Conflict Check (AI vs API)
-        if (postalData.PinStatus === 'Success' && primaryPostOffice.Name) {
-            const apiPOName = primaryPostOffice.Name.toLowerCase();
-            const landmarkValueLower = (parsedData.Landmark || '').toLowerCase();
-            const formattedAddressLower = (parsedData.FormattedAddress || '').toLowerCase();
-
-            // Flag if the AI extracts a Post Office/Locality that is close to the API's P.O. name but still different
-            if (formattedAddressLower.includes(apiPOName) || landmarkValueLower.includes(apiPOName)) {
-                 remarks.push(`Verified: Locality or Landmark found in official Post Office list (${primaryPostOffice.Name}).`);
-            } else if (formattedAddressLower.length > 20 && !formattedAddressLower.includes(apiDistrict) && !formattedAddressLower.includes(apiState)) {
-                // This is a weak signal, but suggests the address is about a different locality
-                // It's a "deep thinking" flag for manual review
-                remarks.push(`Deep Check: Formatted address components do not strongly reference the official P.O. (${primaryPostOffice.Name}).`);
-            }
-        }
-
-        // 4.3. Address Component Density Check & Short Address Check
-        const meaningfulComponents = [
-            parsedData['H.no.'], parsedData['Flat No.'], parsedData['Plot No.'],
-            parsedData.Colony, parsedData.Street, parsedData.Locality, 
-            parsedData['Building Name'], parsedData.Landmark, parsedData.Remaining
-        ].filter(c => c && String(c).trim() !== '').length;
-        
-        const totalAddressLength = (parsedData.FormattedAddress || '').length + (parsedData.Landmark || '').length;
-
-        // Short address check (from previous step)
-        if (totalAddressLength < 35 && parsedData.AddressQuality !== 'Very Good' && parsedData.AddressQuality !== 'Good') {
-             remarks.push(`CRITICAL_ALERT: Formatted address is short (${totalAddressLength} chars). Manual verification recommended.`);
-        }
-        
-        // Density check (e.g., is the address just "House 1, Street")
-        if (totalAddressLength > 20 && meaningfulComponents < 3) {
-            remarks.push(`CRITICAL_ALERT: Low Component Density. Only ${meaningfulComponents} specific components found (H.No., Street, Colony, Landmark, etc.).`);
-        }
 
 
-        // 5. --- Directional Prefix Logic for Landmark ---
+        // 4. --- Directional Prefix Logic for Landmark (Ported from Sheet Script) ---
         let landmarkValue = parsedData.Landmark || '';
+        const originalAddressLower = address.toLowerCase();
         let finalLandmark = '';
 
         if (landmarkValue.toString().trim() !== '') {
-            const foundDirectionalWord = directionalKeywords.find(keyword => rawAddressLower.includes(keyword));
+            const foundDirectionalWord = directionalKeywords.find(keyword => originalAddressLower.includes(keyword));
             
             if (foundDirectionalWord) {
                 // Find the original spelling of the directional word in the raw address
@@ -331,14 +262,14 @@ module.exports = async (req, res) => {
         }
         
         // Final Remarks cleanup and addition
-        if (parsedData.Remaining && parsedData.Remaining.trim() !== '' && !parsedData.Remaining.includes('JSON parse failed')) {
+        if (parsedData.Remaining && parsedData.Remaining.trim() !== '') {
             remarks.push(`Remaining/Ambiguous Text: ${parsedData.Remaining.trim()}`);
         } else if (remarks.length === 0) {
             remarks.push('Address verified and formatted successfully.');
         }
 
 
-        // 6. Construct the Final JSON Response
+        // 5. Construct the Final JSON Response
         const finalResponse = {
             status: "Success",
             customerRawName: customerName,
@@ -346,14 +277,14 @@ module.exports = async (req, res) => {
             
             // Core Address Components
             addressLine1: parsedData.FormattedAddress || address.replace(meaninglessRegex, '').trim() || '',
-            landmark: finalLandmark, // <<< UPDATED
+            landmark: finalLandmark, // <<< UPDATED: Use the new variable with the prefix
             
             // Geographic Components (Prioritize India Post verification)
             postOffice: primaryPostOffice.Name || parsedData['P.O.'] || '',
             tehsil: primaryPostOffice.Taluk || parsedData.Tehsil || '',
             district: primaryPostOffice.District || parsedData['DIST.'] || '',
             state: primaryPostOffice.State || parsedData.State || '',
-            pin: finalPin, // <<< UPDATED
+            pin: finalPin, // <<< UPDATED: Use the corrected/verified PIN
 
             // Quality/Verification Metrics
             addressQuality: parsedData.AddressQuality || 'Medium',
@@ -361,7 +292,7 @@ module.exports = async (req, res) => {
             locationSuitability: parsedData.LocationSuitability || 'Unknown',
             
             // Remarks
-            remarks: remarks.join('; ').trim(), // <<< UPDATED: Send as a single string
+            remarks: remarks.join('; ').trim(), // <<< UPDATED: Use the combined array of remarks
         };
 
         return res.status(200).json(finalResponse);
