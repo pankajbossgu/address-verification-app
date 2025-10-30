@@ -14,8 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (downloadTemplateButton) {
         downloadTemplateButton.addEventListener('click', handleTemplateDownload);
-        // Note: The original logic below is a bit redundant/potentially confusing if used with the robust single.html,
-        // but it's part of the original script.js for the bulk page setup.
         if (csvFileInput) csvFileInput.disabled = false;
     }
 
@@ -32,7 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// --- SINGLE VERIFICATION LOGIC (used if not in single.html's inline script) ---
 async function handleSingleVerification() {
     const rawAddress = document.getElementById('rawAddress').value;
     const customerName = document.getElementById('customerName').value;
@@ -45,10 +42,8 @@ async function handleSingleVerification() {
     }
 
     document.getElementById('verifyButton').disabled = true;
-    // Use modern class list for display/hidden if Tailwind is used consistently,
-    // but sticking to original script's style property use for fidelity.
-    if (loadingMessage) loadingMessage.style.display = 'block';
-    if (resultsContainer) resultsContainer.style.display = 'none';
+    loadingMessage.style.display = 'block';
+    resultsContainer.style.display = 'none';
 
     try {
         const response = await fetch(API_ENDPOINT, {
@@ -84,8 +79,8 @@ async function handleSingleVerification() {
         alert("A network error occurred. Check the console for details. (Possible Vercel CORS/Domain issue)");
     } finally {
         document.getElementById('verifyButton').disabled = false;
-        if (loadingMessage) loadingMessage.style.display = 'none';
-        if (resultsContainer) resultsContainer.style.display = 'block';
+        loadingMessage.style.display = 'none';
+        resultsContainer.style.display = 'block';
     }
 }
 
@@ -111,8 +106,6 @@ function displayErrorResult(data) {
     document.getElementById('out-quality').textContent = 'BAD';
 }
 
-
-// --- TEMPLATE AND BULK VERIFICATION LOGIC ---
 function handleTemplateDownload() {
     const templateData = "ORDER ID,CUSTOMER NAME,CUSTOMER RAW ADDRESS\n";
     const blob = new Blob([templateData], { type: 'text/csv;charset=utf-8;' });
@@ -208,14 +201,13 @@ async function handleBulkVerification() {
     processButton.disabled = true;
     fileInput.disabled = true;
     downloadLink.style.display = 'none';
-    if (progressBarFill) progressBarFill.style.width = '0%';
-    if (statusMessage) statusMessage.textContent = "Parsing CSV...";
+    progressBarFill.style.width = '0%';
+    statusMessage.textContent = "Parsing CSV...";
 
     const reader = new FileReader();
     reader.onload = async function(event) {
         const text = event.target.result;
-        // Basic split, might be error-prone with multi-line or quoted text in CSV cells
-        let lines = text.split('\n').filter(line => line.trim() !== ''); 
+        let lines = text.split('\n').filter(line => line.trim() !== '');
 
         if (lines.length <= 1) {
             alert("CSV file is empty or contains only headers.");
@@ -224,7 +216,6 @@ async function handleBulkVerification() {
             return;
         }
 
-        // Basic header check using comma split, not robust for quoted commas
         const headers = lines[0].split(',').map(h => h.trim().toUpperCase());
         
         if (headers.length < 3 || headers[2] !== 'CUSTOMER RAW ADDRESS') {
@@ -244,7 +235,6 @@ async function handleBulkVerification() {
         const outputRows = [outputData];
 
         for (let i = 1; i < lines.length; i++) {
-            // Again, simple split, assumes no commas inside quotes in address fields
             const row = lines[i].split(',');
             const orderId = row[0] || 'N/A';
             const customerName = row[1] || '';
@@ -268,7 +258,6 @@ async function handleBulkVerification() {
                 verificationResult = await fetchVerification(rawAddress, customerName);
             }
 
-            // Simple CSV cell quoting (not fully robust for all CSV edge cases but covers basic needs)
             const outputRow = [
                 orderId,
                 customerName,
@@ -287,11 +276,11 @@ async function handleBulkVerification() {
             
             processedCount++;
             const progress = (processedCount / totalAddresses) * 100;
-            if (progressBarFill) progressBarFill.style.width = `${progress}%`;
-            if (statusMessage) statusMessage.textContent = `Processing... ${processedCount} of ${totalAddresses} addresses completed.`;
+            progressBarFill.style.width = `${progress}%`;
+            statusMessage.textContent = `Processing... ${processedCount} of ${totalAddresses} addresses completed.`;
         }
 
-        if (statusMessage) statusMessage.textContent = `Processing complete! ${totalAddresses} addresses verified.`;
+        statusMessage.textContent = `Processing complete! ${totalAddresses} addresses verified.`;
         createAndDownloadCSV(outputRows, "verified_addresses.csv");
         processButton.disabled = false;
         fileInput.disabled = false;
