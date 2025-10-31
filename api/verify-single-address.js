@@ -11,7 +11,9 @@ const coreMeaningfulWords = [
     "chd", "chd-", "chandigarh", "chandigarh-", "chandigarh", "west", "sector", "sector-",
     "house", "no", "no#", "house no", "house no#", "floor", "first", "first floor",
     "majra", "colony", "dadu", "dadu majra", "shop", "wine", "wine shop", "house", "number",
-    "tq", "job", "dist"
+    "tq", "job", "dist", 
+    // ADDED: Ambiguous words seen in recent data for stricter client-side cleanup
+    "sirf", "aata", "gp", "gram panchayat" 
 ];
 
 // Combine both lists for comprehensive cleanup
@@ -134,7 +136,7 @@ function extractPin(address) {
 }
 
 function buildGeminiPrompt(originalAddress, postalData) {
-    let basePrompt = `You are an expert Indian address verifier and formatter. Your task is to process a raw address, perform a thorough analysis, and provide a comprehensive response in a single JSON object. **STRICT REQUIREMENT: The entire response, especially all address components, MUST be in clear, standardized English. If the raw address contains any text in a local language (e.g., Hindi, Tamil) or "Hinglish," you MUST strictly translate and transliterate it into standard English (e.g., 'Gali No. 2', not 'galee 2').** Correct all common spelling and phonetic errors in the provided address, such as "rd" to "Road", "nager" to "Nagar", and "nd" to "2nd". Analyze common short forms and phonetic spellings, such as "lean" for "Lane", and use your best judgment to correct them. Be strict about ensuring the output is a valid, single, and complete address for shipping. CRITICAL INSTRUCTION: If the address contains a company name (e.g., 'Stahl india company'), use external knowledge to find its official, full name (e.g., 'Stahl India Pvt. Ltd.'). Use this corrected, official name as the primary entity and prepend it to the 'FormattedAddress'. Do not include the corrected company name in the 'Remaining' field. Use your advanced knowledge to identify and remove any duplicate address components that are present consecutively (e.g., 'Gandhi Street Gandhi Street' should be 'Gandhi Street').
+    let basePrompt = `You are an expert Indian address verifier and formatter. Your task is to process a raw address, perform a thorough analysis, and provide a comprehensive response in a single JSON object. **CRITICAL INSTRUCTION: Analyze ALL location-related text and integrate it fully into the 'FormattedAddress' and other component fields (Colony, Street, etc.). The 'Remaining' field must ONLY contain truly meaningless, junk, or non-address text that cannot be mapped to any logical address component. For a successful verification, 'Remaining' must be empty or null.** **STRICT REQUIREMENT: The entire response, especially all address components, MUST be in clear, standardized English. If the raw address contains any text in a local language (e.g., Hindi, Tamil) or "Hinglish," you MUST strictly translate and transliterate it into standard English (e.g., 'Gali No. 2', not 'galee 2').** Correct all common spelling and phonetic errors in the provided address, such as "rd" to "Road", "nager" to "Nagar", and "nd" to "2nd". Analyze common short forms and phonetic spellings, such as "lean" for "Lane", and use your best judgment to correct them. Be strict about ensuring the output is a valid, single, and complete address for shipping. CRITICAL INSTRUCTION: If the address contains a company name (e.g., 'Stahl india company'), use external knowledge to find its official, full name (e.g., 'Stahl India Pvt. Ltd.'). Use this corrected, official name as the primary entity and prepend it to the 'FormattedAddress'. Do not include the corrected company name in the 'Remaining' field. Use your advanced knowledge to identify and remove any duplicate address components that are present consecutively (e.g., 'Gandhi Street Gandhi Street' should be 'Gandhi Street').
 
 Your response must contain the following keys:
 1.  "H.no.", "Flat No.", "Plot No.", "Room No.", "Building No.", "Block No.", "Ward No.", "Gali No.", "Zone No.": Extract only the number or alphanumeric sequence (e.g., '1-26', 'A/25', '10'). Set to null if not found.
@@ -145,7 +147,7 @@ Your response must contain the following keys:
 6.  "State": The official State from the PIN data.
 7.  "PIN": The 6-digit PIN code. Find and verify the correct PIN. If a PIN exists in the raw address but is incorrect, find the correct one and provide it.
 8.  "Landmark": A specific, named landmark (e.g., "Apollo Hospital"), not a generic type like "school". If multiple landmarks are present, list them comma-separated. **Extract the landmark without any directional words like 'near', 'opposite', 'behind' etc., as this will be handled by the script.**
-9.  "Remaining": A last resort for any text that does not fit into other fields. Clean this by removing meaningless words like 'job', 'raw', 'add-', 'tq', 'dist' and country, state, district, or PIN code.
+9.  "Remaining": A last resort for any text that does not fit into other fields. **It must be empty for a well-verified address.** Clean this by removing meaningless words like 'job', 'raw', 'add-', 'tq', 'dist' and country, state, district, or PIN code.
 10. "FormattedAddress": This is the most important field. Based on your full analysis, create a single, clean, human-readable, and comprehensive shipping-ready address string. It should contain all specific details (H.no., Room No., etc.), followed by locality, street, colony, P.O., Tehsil, and District. DO NOT include the State or PIN in this string. Use commas to separate logical components. Do not invent or "hallucinate" information.
 11. "LocationType": Identify the type of location (e.g., "Village", "Town", "City", "Urban Area").
 12. "AddressQuality": Analyze the address completeness and clarity for shipping. Categorize it as one of the following: Very Good, Good, Medium, Bad, or Very Bad.
@@ -300,8 +302,7 @@ module.exports = async (req, res) => {
         }
         
         // Final Remarks cleanup and addition
-        // UPDATED LOGIC: If 'Remaining' text exists, it's included, but we no longer label it with 
-        // "Remaining/Ambiguous Text: " in the remarks column. We trust the AI has cleaned it up.
+        // Ambiguous Text: Logic - Force it to be empty for a well-verified address
         if (parsedData.Remaining && parsedData.Remaining.trim() !== '') {
             // Push the remaining text directly, without the "Remaining/Ambiguous Text: " prefix
             remarks.push(`Ambiguous Text: ${parsedData.Remaining.trim()}`);
