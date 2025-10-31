@@ -4,102 +4,54 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Address Verification</title>
-    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Re-use your color palette for consistency
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary-blue': '#1D4ED8', // Dark Blue
+                        'secondary-green': '#059669', // Dark Green
+                        'neutral-gray': '#E5E7EB',
+                        'accent-yellow': '#FCD34D', // A nice accent for the bulk button
+                    },
+                    fontFamily: {
+                        // Ensure consistent font
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f7f6;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-
-        .container {
-            background: #ffffff;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            width: 90%;
-            max-width: 600px;
-        }
-
-        h1 {
-            color: #007bff;
-            margin-bottom: 10px;
-        }
-
-        .options-container {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            margin-top: 30px;
-        }
-
-        .button {
-            text-decoration: none;
-            padding: 15px 30px;
-            border-radius: 8px;
-            font-size: 1.1em;
-            font-weight: bold;
-            transition: background-color 0.3s, transform 0.2s;
-        }
-
-        .button.primary {
-            background-color: #28a745; /* Green for single */
-            color: white;
-            border: 2px solid #218838;
-        }
-
-        .button.primary:hover {
-            background-color: #218838;
-            transform: translateY(-2px);
-        }
-
-        .button.secondary {
-            background-color: #ffc107; /* Yellow for bulk */
-            color: #333;
-            border: 2px solid #e0a800;
-        }
-
-        .button.secondary:hover {
-            background-color: #e0a800;
-            transform: translateY(-2px);
-        }
-
-        .note {
-            margin-top: 30px;
-            color: #6c757d;
-            font-size: 0.9em;
-        }
+        body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
-<body>
-    <div class="container">
+<body class="bg-neutral-gray min-h-screen flex items-center justify-center p-4">
+    
+    <div class="w-full max-w-lg bg-white p-8 sm:p-10 rounded-xl shadow-2xl border border-gray-100">
 
-        <header class="header">
-            <h1>
-                AI Address Verification Service
+        <header class="header text-center mb-8">
+            <h1 class="text-4xl font-extrabold text-gray-900 mb-2">
+                <span class="text-primary-blue">AI Address</span> Verification
             </h1>
-            <p class="subtitle">Choose a method to clean, normalize, and verify addresses using Gemini.</p>
+            <p class="text-lg text-gray-500 mt-2">Choose a method to clean, normalize, and verify addresses using Gemini.</p>
         </header>
         
-        <div class="options-container">
+        <div class="options-container space-y-6 mt-8">
             
-            <a href="single.html" class="button primary">
-                📝 Verify Single Address
+            <a href="single.html" class="block w-full text-center py-4 px-6 bg-secondary-green text-white font-bold text-xl rounded-lg shadow-md transition duration-300 transform hover:scale-[1.02] hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-secondary-green focus:ring-opacity-50">
+                <span class="mr-2">📝</span> Verify Single Address
             </a>
             
-            <a href="bulk.html" class="button secondary">
-                📦 Bulk Address Verification
+            <a href="bulk.html" class="block w-full text-center py-4 px-6 bg-accent-yellow text-gray-900 font-bold text-xl rounded-lg shadow-md transition duration-300 transform hover:scale-[1.02] hover:bg-yellow-500 focus:outline-none focus:ring-4 focus:ring-accent-yellow focus:ring-opacity-50">
+                <span class="mr-2">📦</span> Bulk Address Verification
             </a>
         </div>
         
-        <p class="note">
-            The bulk verification process is handled directly on your browser to maintain data privacy.
+        <p class="text-center mt-8 text-sm text-gray-500 border-t pt-4">
+            The bulk verification process is handled directly in your browser to maintain **data privacy** and speed.
         </p>
     </div>
 </body>
