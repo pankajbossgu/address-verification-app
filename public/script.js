@@ -1,10 +1,13 @@
 // public/script.js
 
-// The API endpoint for the serverless function
 const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Check for bulk page elements
+    const verifyButton = document.getElementById('verifyButton');
+    if (verifyButton) {
+        verifyButton.addEventListener('click', handleSingleVerification);
+    }
+    
     const downloadTemplateButton = document.getElementById('downloadTemplateButton');
     const csvFileInput = document.getElementById('csvFileInput');
     const processButton = document.getElementById('processButton');
@@ -27,208 +30,264 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-/**
- * Executes a verification request to the serverless function.
- * This is used by the bulk verification logic.
- * @param {string} rawAddress - The raw address string.
- * @param {string} customerName - The customer name (kept for bulk CSV consistency, but ignored by the API now).
- * @returns {Promise<Object>} The verification result object.
- */
-async function fetchVerification(rawAddress, customerName = "") {
-    const payload = {
-        rawAddress: rawAddress,
-        customerName: customerName // Still sent for bulk consistency, but API will ignore it for cleaning
-    };
+async function handleSingleVerification() {
+    const rawAddress = document.getElementById('rawAddress').value;
+    const customerName = document.getElementById('customerName').value;
+    const loadingMessage = document.getElementById('loading-message');
+    const resultsContainer = document.getElementById('resultsContainer');
 
-    // Implements simple exponential backoff for resilience
-    for (let attempt = 0; attempt < 3; attempt++) {
+    if (rawAddress.trim() === "") {
+        alert("Please enter a raw address to verify.");
+        return;
+    }
+
+    document.getElementById('verifyButton').disabled = true;
+    loadingMessage.style.display = 'block';
+    resultsContainer.style.display = 'none';
+
+    try {
+        const response = await fetch(API_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                address: rawAddress,
+                customerName: customerName
+            })
+        });
+
+        let result;
         try {
-            const response = await fetch(API_ENDPOINT, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || `Server returned error status: ${response.status}`);
-            }
-
-            return response.json();
-        } catch (error) {
-            console.error(`Attempt ${attempt + 1} failed: ${error.message}`);
-            if (attempt === 2) throw error; // Re-throw on final failure
-            const delay = Math.pow(2, attempt) * 1000;
-            await new Promise(resolve => setTimeout(resolve, delay));
+            result = await response.json();
+        } catch (e) {
+            console.error("Non-JSON API response. Status:", response.status);
+            alert(`Verification Failed: Received a server error (${response.status}) from the Vercel API. Check Vercel logs.`);
+            return;
         }
+
+
+        if (response.ok && result.status === "Success") {
+            displayResults(result);
+        } else {
+            alert(`Verification Failed: ${result.error || result.remarks || "Unknown error."}`);
+            displayErrorResult(result);
+        }
+
+    } catch (e) {
+        console.error("Fetch Error:", e);
+        alert("A network error occurred. Check the console for details. (Possible Vercel CORS/Domain issue)");
+    } finally {
+        document.getElementById('verifyButton').disabled = false;
+        loadingMessage.style.display = 'none';
+        resultsContainer.style.display = 'block';
     }
 }
 
+function displayResults(data) {
+    document.getElementById('out-name').textContent = data.customerCleanName || 'N/A';
+    document.getElementById('out-address').textContent = data.addressLine1 || 'N/A';
+    document.getElementById('out-landmark').textContent = data.landmark || 'N/A';
+    document.getElementById('out-state').textContent = data.state || 'N/A';
+    document.getElementById('out-district').textContent = data.district || 'N/A';
+    document.getElementById('out-pin').textContent = data.pin || 'N/A';
+    document.getElementById('out-remarks').textContent = data.remarks || 'No issues found.';
+    document.getElementById('out-quality').textContent = data.addressQuality || 'N/A';
+}
+
+function displayErrorResult(data) {
+    document.getElementById('out-name').textContent = data.customerCleanName || '---';
+    document.getElementById('out-address').textContent = data.addressLine1 || 'API ERROR';
+    document.getElementById('out-landmark').textContent = '---';
+    document.getElementById('out-state').textContent = data.state || '---';
+    document.getElementById('out-district').textContent = data.district || '---';
+    document.getElementById('out-pin').textContent = data.pin || '---';
+    document.getElementById('out-remarks').textContent = data.remarks || data.error || 'Verification failed.';
+    document.getElementById('out-quality').textContent = 'BAD';
+}
 
 function handleTemplateDownload() {
-    createAndDownloadCSV(
-        ["Order ID", "Customer Name", "Raw Address"], 
-        "address_verification_template.csv", 
-        false, // Do not include existing content
-        ["1001","John Doe","123 Main Street, Anytown, CA 90210"],
-        ["1002","Jane Smith","456 Oak Ave, Otherville, NY 10001"]
-    );
-}
-
-// Helper to create and download the CSV
-function createAndDownloadCSV(outputRows, filename, isBulk = true, ...sampleRows) {
-    const header = isBulk 
-        ? "Order ID,Customer Name,Raw Address,Cleaned Name,Cleaned Address Line,Landmark,State,District,Pin,Remarks,Address Quality\n"
-        : outputRows.join(','); // Only used for template in non-bulk mode
-
-    let csvContent = "data:text/csv;charset=utf-8,";
+    const templateData = "ORDER ID,CUSTOMER NAME,CUSTOMER RAW ADDRESS\n";
+    const blob = new Blob([templateData], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
     
-    if (isBulk) {
-        csvContent += header;
-        outputRows.forEach(row => {
-            csvContent += row + "\n";
-        });
-    } else {
-        // Template case
-        csvContent += outputRows.join(',') + "\n";
-        sampleRows.forEach(rowArray => {
-             csvContent += rowArray.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',') + "\n";
-        });
-    }
-
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", filename);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'address_template.csv');
+    link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 }
 
+async function fetchVerification(address, name) {
+    try {
+        const response = await fetch(API_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address: address, customerName: name })
+        });
+        
+        let result = {};
+        try {
+            result = await response.json();
+        } catch (e) {
+            console.error("Non-JSON API response in bulk. Status:", response.status);
+            return {
+                status: "Error",
+                customerCleanName: name,
+                addressLine1: "Server Error",
+                remarks: `API Failed: Server returned non-JSON error (${response.status}).`,
+                addressQuality: "VERY BAD"
+            };
+        }
 
-// --- Bulk Verification Logic ---
-
-// Helper function to update bulk status message (Duplicated in bulk.html for canvas, kept here for robustness)
-function updateStatusMessage(message, isError = false) {
-    const statusMessage = document.getElementById('statusMessage');
-    if (statusMessage) {
-        statusMessage.textContent = message;
-        statusMessage.className = `mt-4 p-3 rounded-lg text-center font-semibold transition duration-300 ${isError ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`;
+        
+        if (response.ok && result.status === "Success") {
+            return result;
+        } else {
+            return {
+                status: "Error",
+                customerCleanName: name,
+                addressLine1: "API Error",
+                landmark: "",
+                state: "",
+                district: "",
+                pin: "",
+                remarks: `API Failed: ${result.error || result.remarks || 'Unknown Server Error.'}`,
+                addressQuality: "BAD"
+            };
+        }
+    } catch (e) {
+        console.error("Bulk Fetch Error:", e);
+        return {
+            status: "Error",
+            customerCleanName: name,
+            addressLine1: "Network/Timeout Error",
+            landmark: "",
+            state: "",
+            district: "",
+            pin: "",
+            remarks: "Network or timeout error during API call. (Check CORS/Vercel)",
+            addressQuality: "VERY BAD"
+        };
     }
+}
+
+function createAndDownloadCSV(dataArray, filename) {
+    const csvContent = dataArray.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const downloadLink = document.getElementById('downloadLink');
+    downloadLink.setAttribute('href', url);
+    downloadLink.setAttribute('download', filename);
+    downloadLink.style.display = 'block';
 }
 
 async function handleBulkVerification() {
     const fileInput = document.getElementById('csvFileInput');
-    const processButton = document.getElementById('processButton');
-    const progressBarFill = document.getElementById('progressBarFill');
     const file = fileInput.files[0];
-
     if (!file) {
-        updateStatusMessage("Please select a CSV file.", true);
+        alert("Please select a CSV file.");
         return;
     }
 
+    const processButton = document.getElementById('processButton');
+    const statusMessage = document.getElementById('status-message');
+    const progressBarFill = document.getElementById('progressBarFill');
+    const downloadLink = document.getElementById('downloadLink');
+
     processButton.disabled = true;
     fileInput.disabled = true;
+    downloadLink.style.display = 'none';
     progressBarFill.style.width = '0%';
-    updateStatusMessage('Starting file read...', false);
+    statusMessage.textContent = "Parsing CSV...";
 
     const reader = new FileReader();
+    reader.onload = async function(event) {
+        const text = event.target.result;
+        let lines = text.split('\n').filter(line => line.trim() !== '');
 
-    reader.onload = async function(e) {
-        const text = e.target.result;
-        // Split by newline and remove header (first row)
-        const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
         if (lines.length <= 1) {
-            updateStatusMessage("CSV file is empty or only contains a header.", true);
+            alert("CSV file is empty or contains only headers.");
             processButton.disabled = false;
             fileInput.disabled = false;
             return;
         }
 
-        const dataRows = lines.slice(1);
-        const totalAddresses = dataRows.length;
+        const headers = lines[0].split(',').map(h => h.trim().toUpperCase());
+        
+        if (headers.length < 3 || headers[2] !== 'CUSTOMER RAW ADDRESS') {
+            alert("Error: CSV must contain 'ORDER ID', 'CUSTOMER NAME', and 'CUSTOMER RAW ADDRESS' in the first three columns.");
+            processButton.disabled = false;
+            fileInput.disabled = false;
+            return;
+        }
+
+        const outputData = [
+            "ORDER ID", "CUSTOMER NAME", "RAW ADDRESS", 
+            "CLEAN NAME", "ADDRESS LINE 1", "LANDMARK", 
+            "STATE", "DISTRICT", "PIN", "REMARK", "ADDRESS QUALITY"
+        ].join(',');
         let processedCount = 0;
-        let outputRows = [];
+        const totalAddresses = lines.length - 1;
+        const outputRows = [outputData];
 
-        // Prepare a robust regex for parsing CSV row, handling quotes
-        const csvRegex = /("([^"]*)"|[^,]+)/g;
-
-        for (const line of dataRows) {
-            // Robustly extract columns using the regex
-            const columns = [...line.matchAll(csvRegex)].map(match => {
-                // If it was a quoted string, remove the quotes and un-escape double-quotes
-                let value = match[1];
-                if (value.startsWith('"') && value.endsWith('"')) {
-                    value = value.substring(1, value.length - 1).replace(/""/g, '"');
-                }
-                return value.trim();
-            });
-
-            // Assuming the template format: [0] Order ID, [1] Customer Name, [2] Raw Address
-            const orderId = columns[0] || 'N/A';
-            const customerName = columns[1] || ''; // Customer Name is still read from CSV
-            const rawAddress = columns[2] || '';
-
-            if (rawAddress === '') {
-                // Skip rows with no address, but still output them with N/A fields
-                const outputRow = [
-                    orderId, customerName, rawAddress, '', '', '', '', '', '', 'Skipped: Empty Raw Address', 'Low'
-                ].map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',');
-                outputRows.push(outputRow);
+        for (let i = 1; i < lines.length; i++) {
+            const row = lines[i].split(',');
+            const orderId = row[0] || 'N/A';
+            const customerName = row[1] || '';
+            const rawAddress = row[2] || '';
+            
+            let verificationResult;
+            
+            if (rawAddress.trim() === "") {
+                verificationResult = {
+                    status: "Skipped",
+                    customerCleanName: customerName,
+                    addressLine1: "",
+                    landmark: "",
+                    state: "",
+                    district: "",
+                    pin: "",
+                    remarks: "Skipped: Address is empty.",
+                    addressQuality: "BAD"
+                };
             } else {
-                let verificationResult;
-                try {
-                    // Call the common fetch function
-                    verificationResult = await fetchVerification(rawAddress, customerName);
-                } catch (e) {
-                    verificationResult = {
-                        customerCleanName: '',
-                        addressLine1: '',
-                        landmark: '',
-                        state: '',
-                        district: '',
-                        pin: '',
-                        remarks: `API Error: ${e.message}`,
-                        addressQuality: 'Low'
-                    };
-                }
-
-                // NOTE: customerCleanName will be empty as the API no longer generates it
-                const outputRow = [
-                    orderId,
-                    customerName, // Keep raw name
-                    rawAddress,
-                    verificationResult.customerCleanName || '',
-                    verificationResult.addressLine1 || '',
-                    verificationResult.landmark || '',
-                    verificationResult.state || '',
-                    verificationResult.district || '',
-                    verificationResult.pin || '',
-                    verificationResult.remarks || '',
-                    verificationResult.addressQuality || ''
-                ].map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',');
-
-                outputRows.push(outputRow);
+                verificationResult = await fetchVerification(rawAddress, customerName);
             }
+
+            const outputRow = [
+                orderId,
+                customerName,
+                rawAddress,
+                verificationResult.customerCleanName || '',
+                verificationResult.addressLine1 || '',
+                verificationResult.landmark || '',
+                verificationResult.state || '',
+                verificationResult.district || '',
+                verificationResult.pin || '',
+                verificationResult.remarks || '',
+                verificationResult.addressQuality || ''
+            ].map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',');
+
+            outputRows.push(outputRow);
             
             processedCount++;
             const progress = (processedCount / totalAddresses) * 100;
             progressBarFill.style.width = `${progress}%`;
-            updateStatusMessage(`Processing... ${processedCount} of ${totalAddresses} addresses completed.`, false);
+            statusMessage.textContent = `Processing... ${processedCount} of ${totalAddresses} addresses completed.`;
         }
 
-        updateStatusMessage(`Processing complete! ${totalAddresses} addresses verified. Click 'Download Verified CSV'.`, false);
+        statusMessage.textContent = `Processing complete! ${totalAddresses} addresses verified.`;
         createAndDownloadCSV(outputRows, "verified_addresses.csv");
         processButton.disabled = false;
         fileInput.disabled = false;
     };
 
     reader.onerror = function() {
-        updateStatusMessage("Error reading file.", true);
+        alert("Error reading file.");
         processButton.disabled = false;
         fileInput.disabled = false;
     };
