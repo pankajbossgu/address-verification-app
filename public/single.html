@@ -18,6 +18,10 @@
                         // Added colors for the critical alert
                         'alert-light': '#FEE2E2', // Red-100
                         'alert-dark': '#991B1B', // Red-800
+                        // Added colors for copy button feedback
+                        'yellow-100': '#FEF3C7',
+                        'yellow-800': '#92400E',
+                        'yellow-300': '#FCD34D',
                     },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
@@ -32,10 +36,8 @@
         .remarks-block {
             transition: all 0.3s ease;
         }
-        /* Added class to make result blocks use flex for alignment with copy button */
+        /* All result blocks are relative for button positioning */
         .result-block {
-            display: flex;
-            flex-direction: column; /* Stack elements vertically */
             position: relative; /* For button placement */
         }
         /* Style for the copy button */
@@ -53,6 +55,7 @@
             border-radius: 0.375rem; /* rounded-md */
             transition: all 0.15s;
             cursor: pointer;
+            z-index: 10;
         }
         .copy-btn:hover {
             background-color: #F3F4F6; /* Gray-50 */
@@ -62,7 +65,7 @@
             outline: none;
             box-shadow: 0 0 0 2px rgba(29, 77, 216, 0.5); /* Primary-blue ring */
         }
-        /* Ensure the content is not covered by the button */
+        /* Ensure the content is not covered by the button, ONLY for blocks with a button */
         .result-content {
             padding-right: 3.5rem; /* To prevent content from going under the button */
         }
@@ -154,20 +157,14 @@
                         </div>
                     </div>
                     <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                        <button class="copy-btn" data-target="out-quality" title="Copy Quality">Copy</button>
-                        <div class="result-content">
-                            <strong class="text-gray-600 block mb-1">Quality:</strong> 
-                            <span id="out-quality" class="text-gray-800"></span>
-                        </div>
+                        <strong class="text-gray-600 block mb-1">Quality:</strong> 
+                        <span id="out-quality" class="text-gray-800"></span>
                     </div>
                 </div>
                 
                 <div id="remarks-block" class="result-block remarks-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                    <button class="copy-btn" data-target="out-remarks" title="Copy Remarks">Copy</button>
-                    <div class="result-content">
-                        <strong class="text-gray-600 block mb-1">Remarks:</strong> 
-                        <span id="out-remarks" class="text-gray-800 italic"></span>
-                    </div>
+                    <strong class="text-gray-600 block mb-1">Remarks:</strong> 
+                    <span id="out-remarks" class="text-gray-800 italic"></span>
                 </div>
             </div>
         </div>
@@ -185,6 +182,8 @@
             
             // NEW: Add event listener for all copy buttons
             document.querySelectorAll('.copy-btn').forEach(button => {
+                // Set original text for flashButton to restore
+                button.setAttribute('data-original-text', 'Copy'); 
                 button.addEventListener('click', (event) => {
                     const targetId = event.currentTarget.getAttribute('data-target');
                     copyToClipboard(targetId, event.currentTarget);
@@ -213,21 +212,18 @@
         
         // NEW: Utility function to temporarily change button text and style
         function flashButton(button, newText, duration, flashClasses) {
-            const originalText = button.textContent;
-            const originalClasses = Array.from(button.classList);
+            const originalText = button.getAttribute('data-original-text');
+            const originalClassName = button.className; 
             
-            // Remove the default classes for the flash effect
-            button.classList.remove('bg-white', 'text-gray-600', 'border-gray-300', 'hover:bg-gray-50', 'hover:text-gray-800', 'border');
-
-            // Apply the flash classes
-            button.classList.add(...flashClasses.split(' '));
+            // Apply flash style
+            // Note: We're replacing the entire class list with 'copy-btn' plus the flash classes
+            button.className = 'copy-btn ' + flashClasses + ' border'; // Added 'border' back for the flash state
             button.textContent = newText;
 
             setTimeout(() => {
                 // Restore original state
                 button.textContent = originalText;
-                button.className = ''; // Clear all classes
-                button.classList.add(...originalClasses); // Restore original classes
+                button.className = originalClassName; // Restore original classes
             }, duration);
         }
 
