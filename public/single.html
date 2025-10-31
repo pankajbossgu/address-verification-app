@@ -32,6 +32,40 @@
         .remarks-block {
             transition: all 0.3s ease;
         }
+        /* Added class to make result blocks use flex for alignment with copy button */
+        .result-block {
+            display: flex;
+            flex-direction: column; /* Stack elements vertically */
+            position: relative; /* For button placement */
+        }
+        /* Style for the copy button */
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem; /* text-xs */
+            line-height: 1rem;
+            /* Added utility classes for a clean look */
+            background-color: transparent;
+            color: #4B5563; /* Gray-600 */
+            border: 1px solid #D1D5DB; /* Gray-300 */
+            border-radius: 0.375rem; /* rounded-md */
+            transition: all 0.15s;
+            cursor: pointer;
+        }
+        .copy-btn:hover {
+            background-color: #F3F4F6; /* Gray-50 */
+            color: #1F2937; /* Gray-800 */
+        }
+        .copy-btn:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(29, 77, 216, 0.5); /* Primary-blue ring */
+        }
+        /* Ensure the content is not covered by the button */
+        .result-content {
+            padding-right: 3.5rem; /* To prevent content from going under the button */
+        }
     </style>
 </head>
 <body class="bg-neutral-gray min-h-screen flex items-center justify-center p-4">
@@ -72,42 +106,68 @@
         <div id="resultsContainer" class="hidden mt-10">
             <h3 class="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">Verification Results</h3>
             <div class="space-y-4">
+                
                 <div class="result-block bg-success-light p-4 rounded-lg border border-green-300 shadow-sm">
-                    <strong class="text-success-dark block mb-1">Clean Name:</strong> 
-                    <span id="out-name" class="text-gray-700"></span>
+                    <button class="copy-btn" data-target="out-name" title="Copy Clean Name">Copy</button>
+                    <div class="result-content">
+                        <strong class="text-success-dark block mb-1">Clean Name:</strong> 
+                        <span id="out-name" class="text-gray-700"></span>
+                    </div>
                 </div>
+
                 <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                    <strong class="text-gray-600 block mb-1">Clean Address Line 1:</strong> 
-                    <span id="out-address" class="text-gray-800 font-medium"></span>
+                    <button class="copy-btn" data-target="out-address" title="Copy Clean Address Line 1">Copy</button>
+                    <div class="result-content">
+                        <strong class="text-gray-600 block mb-1">Clean Address Line 1:</strong> 
+                        <span id="out-address" class="text-gray-800 font-medium"></span>
+                    </div>
                 </div>
                 
                 <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                    <strong class="text-gray-600 block mb-1">Landmark (with Prefix):</strong> 
-                    <span id="out-landmark" class="text-gray-800 font-medium"></span>
+                    <button class="copy-btn" data-target="out-landmark" title="Copy Landmark">Copy</button>
+                    <div class="result-content">
+                        <strong class="text-gray-600 block mb-1">Landmark (with Prefix):</strong> 
+                        <span id="out-landmark" class="text-gray-800 font-medium"></span>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                        <strong class="text-gray-600 block mb-1">District:</strong> 
-                        <span id="out-district" class="text-gray-800"></span>
+                        <button class="copy-btn" data-target="out-district" title="Copy District">Copy</button>
+                        <div class="result-content">
+                            <strong class="text-gray-600 block mb-1">District:</strong> 
+                            <span id="out-district" class="text-gray-800"></span>
+                        </div>
                     </div>
                     <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                        <strong class="text-gray-600 block mb-1">State:</strong> 
-                        <span id="out-state" class="text-gray-800"></span>
+                        <button class="copy-btn" data-target="out-state" title="Copy State">Copy</button>
+                        <div class="result-content">
+                            <strong class="text-gray-600 block mb-1">State:</strong> 
+                            <span id="out-state" class="text-gray-800"></span>
+                        </div>
                     </div>
                     <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                        <strong class="text-gray-600 block mb-1">PIN:</strong> 
-                        <span id="out-pin" class="text-gray-800 font-bold"></span>
+                        <button class="copy-btn" data-target="out-pin" title="Copy PIN">Copy</button>
+                        <div class="result-content">
+                            <strong class="text-gray-600 block mb-1">PIN:</strong> 
+                            <span id="out-pin" class="text-gray-800 font-bold"></span>
+                        </div>
                     </div>
                     <div class="result-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                        <strong class="text-gray-600 block mb-1">Quality:</strong> 
-                        <span id="out-quality" class="text-gray-800"></span>
+                        <button class="copy-btn" data-target="out-quality" title="Copy Quality">Copy</button>
+                        <div class="result-content">
+                            <strong class="text-gray-600 block mb-1">Quality:</strong> 
+                            <span id="out-quality" class="text-gray-800"></span>
+                        </div>
                     </div>
                 </div>
                 
                 <div id="remarks-block" class="result-block remarks-block bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                    <strong class="text-gray-600 block mb-1">Remarks:</strong> 
-                    <span id="out-remarks" class="text-gray-800 italic"></span>
+                    <button class="copy-btn" data-target="out-remarks" title="Copy Remarks">Copy</button>
+                    <div class="result-content">
+                        <strong class="text-gray-600 block mb-1">Remarks:</strong> 
+                        <span id="out-remarks" class="text-gray-800 italic"></span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -122,7 +182,54 @@
             if (verifyButton) {
                 verifyButton.addEventListener('click', handleSingleVerification);
             }
+            
+            // NEW: Add event listener for all copy buttons
+            document.querySelectorAll('.copy-btn').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    const targetId = event.currentTarget.getAttribute('data-target');
+                    copyToClipboard(targetId, event.currentTarget);
+                });
+            });
         });
+
+        // NEW: Copy function
+        function copyToClipboard(elementId, button) {
+            const element = document.getElementById(elementId);
+            const textToCopy = element ? element.textContent.trim() : '';
+
+            if (textToCopy === 'N/A' || textToCopy === 'No specific remarks.' || textToCopy === '') {
+                // Do not copy placeholder text
+                flashButton(button, 'No Data', 1000, 'bg-yellow-100 text-yellow-800 border-yellow-300');
+                return;
+            }
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                flashButton(button, 'Copied!', 1500, 'bg-success-light text-success-dark border-green-300');
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+                flashButton(button, 'Error', 1500, 'bg-alert-light text-alert-dark border-red-300');
+            });
+        }
+        
+        // NEW: Utility function to temporarily change button text and style
+        function flashButton(button, newText, duration, flashClasses) {
+            const originalText = button.textContent;
+            const originalClasses = Array.from(button.classList);
+            
+            // Remove the default classes for the flash effect
+            button.classList.remove('bg-white', 'text-gray-600', 'border-gray-300', 'hover:bg-gray-50', 'hover:text-gray-800', 'border');
+
+            // Apply the flash classes
+            button.classList.add(...flashClasses.split(' '));
+            button.textContent = newText;
+
+            setTimeout(() => {
+                // Restore original state
+                button.textContent = originalText;
+                button.className = ''; // Clear all classes
+                button.classList.add(...originalClasses); // Restore original classes
+            }, duration);
+        }
 
         function showMessage(elementId, text, isError = false) {
             const element = document.getElementById(elementId);
