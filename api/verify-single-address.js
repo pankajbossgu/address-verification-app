@@ -300,9 +300,15 @@ module.exports = async (req, res) => {
         }
         
         // Final Remarks cleanup and addition
+        // UPDATED LOGIC: If 'Remaining' text exists, it's included, but we no longer label it with 
+        // "Remaining/Ambiguous Text: " in the remarks column. We trust the AI has cleaned it up.
         if (parsedData.Remaining && parsedData.Remaining.trim() !== '') {
-            remarks.push(`Remaining/Ambiguous Text: ${parsedData.Remaining.trim()}`);
-        } else if (remarks.length === 0) {
+            // Push the remaining text directly, without the "Remaining/Ambiguous Text: " prefix
+            remarks.push(`Ambiguous Text: ${parsedData.Remaining.trim()}`);
+        }
+        
+        // Add success message only if no other critical remarks exist
+        if (remarks.length === 0) {
             remarks.push('Address verified and formatted successfully.');
         }
 
@@ -311,7 +317,7 @@ module.exports = async (req, res) => {
         const finalResponse = {
             status: "Success",
             customerRawName: customerName,
-            customerCleanName: cleanedName, // <<< NOW USES DEDICATED CLEANING FUNCTION
+            customerCleanName: cleanedName, 
             
             // Core Address Components
             addressLine1: parsedData.FormattedAddress || address.replace(meaninglessRegex, '').trim() || '',
