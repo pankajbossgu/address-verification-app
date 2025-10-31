@@ -21,6 +21,37 @@ const meaninglessRegex = new RegExp(`\\b(?:${meaningfulWords.join('|')})\\b`, 'g
 // directionalKeywords array is used for the Landmark Prefix Logic
 const directionalKeywords = ['near', 'opposite', 'back side', 'front side', 'behind', 'opp']; 
 
+// ADDED: List of prefixes/suffixes to remove from names
+const nameCleanupWords = [
+    'mr', 'mrs', 'ms', 'dr', 'prof', 'engr', 'pvt', 'ltd', 'private', 'limited', 'co', 'company',
+    'proprietor', 'prop', 'firm', 'group', 'the'
+];
+const nameCleanupRegex = new RegExp(`\\b(?:${nameCleanupWords.join('|')})\\b`, 'gi');
+
+/**
+ * Standardizes and cleans the customer name.
+ * @param {string} name - The raw customer name string.
+ * @returns {string} The cleaned and standardized name.
+ */
+function cleanCustomerName(name) {
+    if (!name) return null;
+    let cleaned = String(name)
+        // Remove special characters, keeping only letters, numbers, and spaces
+        .replace(/[^\w\s]/gi, '') 
+        // Remove common prefixes/suffixes (case-insensitive)
+        .replace(nameCleanupRegex, '')
+        // Replace multiple spaces with a single space
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    // Capitalize each word (Title Case) for standardization
+    cleaned = cleaned.toLowerCase().split(' ').map((word) => {
+        return word.charAt(0).toUpperCase() + word.slice(1);
+    }).join(' ');
+
+    return cleaned || null;
+}
+
 
 async function getIndiaPostData(pin) {
     if (pincodeCache[pin]) return pincodeCache[pin];
@@ -168,7 +199,8 @@ module.exports = async (req, res) => {
             return res.status(400).json({ status: "Error", error: "Address is required." });
         }
 
-        const cleanedName = customerName.replace(/[^\w\s]/gi, '').replace(/\s+/g, ' ').trim() || null;
+        // UPDATED: Use the new dedicated cleaning function
+        const cleanedName = cleanCustomerName(customerName);
         const initialPin = extractPin(address);
         let postalData = { PinStatus: 'Error' };
         
@@ -268,8 +300,6 @@ module.exports = async (req, res) => {
         }
         
         // Final Remarks cleanup and addition
-        // The Remaining/Ambiguous Text check will now be cleaner because the AI is instructed
-        // not to put the company name there if it successfully corrected and used it.
         if (parsedData.Remaining && parsedData.Remaining.trim() !== '') {
             remarks.push(`Remaining/Ambiguous Text: ${parsedData.Remaining.trim()}`);
         } else if (remarks.length === 0) {
@@ -281,18 +311,18 @@ module.exports = async (req, res) => {
         const finalResponse = {
             status: "Success",
             customerRawName: customerName,
-            customerCleanName: cleanedName,
+            customerCleanName: cleanedName, // <<< NOW USES DEDICATED CLEANING FUNCTION
             
             // Core Address Components
             addressLine1: parsedData.FormattedAddress || address.replace(meaninglessRegex, '').trim() || '',
-            landmark: finalLandmark, // <<< UPDATED
+            landmark: finalLandmark, 
             
             // Geographic Components (Prioritize India Post verification)
             postOffice: primaryPostOffice.Name || parsedData['P.O.'] || '',
             tehsil: primaryPostOffice.Taluk || parsedData.Tehsil || '',
             district: primaryPostOffice.District || parsedData['DIST.'] || '',
             state: primaryPostOffice.State || parsedData.State || '',
-            pin: finalPin, // <<< UPDATED
+            pin: finalPin, 
 
             // Quality/Verification Metrics
             addressQuality: parsedData.AddressQuality || 'Medium',
@@ -300,7 +330,7 @@ module.exports = async (req, res) => {
             locationSuitability: parsedData.LocationSuitability || 'Unknown',
             
             // Remarks
-            remarks: remarks.join('; ').trim(), // <<< UPDATED: Send as a single string
+            remarks: remarks.join('; ').trim(), 
         };
 
         return res.status(200).json(finalResponse);
