@@ -301,12 +301,20 @@ module.exports = async (req, res) => {
             }
         }
         
-        // Final Remarks cleanup and addition
-        // Ambiguous Text: Logic - Force it to be empty for a well-verified address
-        if (parsedData.Remaining && parsedData.Remaining.trim() !== '') {
-            // Push the remaining text directly, without the "Remaining/Ambiguous Text: " prefix
-            remarks.push(`Ambiguous Text: ${parsedData.Remaining.trim()}`);
+        // ----------------------------------------------------------------------
+        // CRITICAL FIX: Explicitly clean the Remaining field before checking it
+        // ----------------------------------------------------------------------
+        let finalRemaining = parsedData.Remaining || '';
+        // Apply the cleaning regex to remove meaningless words and trim whitespace
+        finalRemaining = finalRemaining.replace(meaninglessRegex, '').trim();
+        // Consolidate any multiple spaces left by the regex replacement
+        finalRemaining = finalRemaining.replace(/\s{2,}/g, ' ');
+
+        if (finalRemaining !== '') {
+            // If anything is left after the client-side scrub, it is truly ambiguous
+            remarks.push(`Ambiguous Text: ${finalRemaining}`);
         }
+        // ----------------------------------------------------------------------
         
         // Add success message only if no other critical remarks exist
         if (remarks.length === 0) {
