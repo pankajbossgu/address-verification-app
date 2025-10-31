@@ -126,8 +126,12 @@
 
 
         function handleTemplateDownload() {
-            const templateHeaders = "ORDER ID,CUSTOMER NAME,CUSTOMER RAW ADDRESS\\n";
-            const templateData = "1,\"John Doe\",\"H.No. 123, Sector 40B, near bus stand, Chandigarh\"\\n2,\"Jane Smith\",\"5th Floor, Alpha Tower, Mumbai 400001\"\\n";
+            // FIX: Use a single '\n' for the newline character for correct CSV formatting
+            const templateHeaders = "ORDER ID,CUSTOMER NAME,CUSTOMER RAW ADDRESS\n";
+            const templateData = 
+                "1,\"John Doe\",\"H.No. 123, Sector 40B, near bus stand, Chandigarh\"\n" +
+                "2,\"Jane Smith\",\"5th Floor, Alpha Tower, Mumbai 400001\"\n";
+                
             const csvContent = templateHeaders + templateData;
             
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -141,8 +145,8 @@
 
         // Existing parseCSV function (kept for robustness)
         function parseCSV(text) {
-            // Split by the actual newline character '\\n'
-            const lines = text.split('\\n'); 
+            // Split by the actual newline character '\n'
+            const lines = text.split('\n'); 
             if (lines.length < 2) return [];
 
             // Simple split for headers (handles the first row)
@@ -164,7 +168,7 @@
                 if (lines[i].trim() === '') continue;
                 
                 // Using a regex match that can handle basic quoted fields
-                const row = lines[i].match(/(".*?"|[^",\\r\\n]+)(?=\\s*,|\\s*$)/g) || [];
+                const row = lines[i].match(/(".*?"|[^",\r\n]+)(?=\s*,|\s*$)/g) || [];
                 
                 // Clean up quoted values
                 const cleanedRow = row.map(cell => cell.trim().replace(/^\"|\"$/g, '').replace(/\"\"/g, '\"'));
@@ -228,8 +232,8 @@
 
         function createAndDownloadCSV(rows, filename) {
             // Updated header to match the output columns including LANDMARK
-            const header = "ORDER ID,CUSTOMER NAME,CUSTOMER RAW ADDRESS,CLEAN NAME,CLEAN ADDRESS LINE 1,LANDMARK,STATE,DISTRICT,PIN,REMARKS,QUALITY\\n";
-            const csvContent = header + rows.join('\\n');
+            const header = "ORDER ID,CUSTOMER NAME,CUSTOMER RAW ADDRESS,CLEAN NAME,CLEAN ADDRESS LINE 1,LANDMARK,STATE,DISTRICT,PIN,REMARKS,QUALITY\n";
+            const csvContent = header + rows.join('\n');
             
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const downloadLink = document.getElementById('downloadLink');
