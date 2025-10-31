@@ -39,7 +39,6 @@
 <body class="bg-neutral-gray min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-2xl bg-white p-8 sm:p-10 rounded-xl shadow-2xl border border-gray-100">
 
-        <!-- Back Button -->
         <a href="index.html" class="text-primary-blue hover:text-blue-700 font-medium mb-6 inline-flex items-center transition duration-150">
             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
             Back to Home
@@ -52,10 +51,7 @@
             <p class="text-md text-gray-500 mt-2">Enter a raw address below to clean, normalize, and verify its geographic details.</p>
         </header>
         
-        <!-- Input Form -->
         <div class="space-y-6">
-            
-            <!-- Removed Customer Name Input Field -->
             
             <div>
                 <label for="rawAddress" class="block text-lg font-semibold text-gray-700 mb-2">Raw Address</label>
@@ -67,23 +63,18 @@
             </button>
         </div>
 
-        <!-- Loading/Status Message -->
         <div id="loading-message" class="hidden mt-8 p-4 text-center rounded-lg bg-yellow-100 text-yellow-800 font-medium transition duration-300 shadow-inner">
             Processing... Please wait.
         </div>
 
-        <!-- Results Container -->
         <div id="resultsContainer" class="mt-8 pt-6 border-t border-gray-200 hidden">
             <h2 class="text-2xl font-bold text-gray-800 mb-4 text-center">Verification Results</h2>
 
             <div id="remarks-block" class="remarks-block p-4 mb-6 rounded-lg shadow-md text-sm font-medium transition duration-300 ease-in-out bg-success-light text-success-dark">
-                <!-- Remarks will be injected here -->
                 <p id="out-remarks"></p>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-                <!-- Removed Clean Name Output -->
 
                 <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
                     <p class="text-xs font-semibold uppercase text-gray-500">Cleaned Address Line</p>
@@ -122,10 +113,17 @@
         </div>
     </div>
 
-    <!-- JavaScript includes Tailwind and application logic -->
-    <script src="script.js"></script>
-
     <script>
+        // The API endpoint for the serverless function
+        const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const verifyButton = document.getElementById('verifyButton');
+            if (verifyButton) {
+                verifyButton.addEventListener('click', handleSingleVerification);
+            }
+        });
+
         // Custom helper functions
         function showMessage(elementId, message, isError = false) {
             const el = document.getElementById(elementId);
@@ -138,13 +136,18 @@
         function applyRemarksStyle(remarks) {
             const remarksBlock = document.getElementById('remarks-block');
             const remarksText = document.getElementById('out-remarks');
-            remarksText.textContent = remarks || 'Address verified successfully with high confidence.';
+            const remarksContent = remarks || 'Address verified successfully with high confidence.';
 
-            remarksBlock.classList.remove('bg-success-light', 'text-success-dark', 'bg-alert-light', 'text-alert-dark');
+            remarksText.textContent = remarksContent;
 
-            // If remarks indicate an issue (e.g., missing PIN or major correction), apply alert style
-            if (remarks && (remarks.includes('No Pincode found') || remarks.includes('could not be parsed') || remarks.includes('Address was significantly corrected'))) {
+            remarksBlock.classList.remove('bg-success-light', 'text-success-dark', 'bg-alert-light', 'text-alert-dark', 'bg-yellow-100', 'text-yellow-800');
+
+            // If remarks indicate a critical issue (e.g., major correction or failure), apply alert style
+            if (remarksContent.toLowerCase().includes('no pincode found') || remarksContent.toLowerCase().includes('could not be parsed') || remarksContent.toLowerCase().includes('was significantly corrected')) {
                 remarksBlock.classList.add('bg-alert-light', 'text-alert-dark');
+            } else if (remarksContent.toLowerCase().includes('warning')) {
+                // For general warnings (e.g., Post Office verification failed)
+                 remarksBlock.classList.add('bg-yellow-100', 'text-yellow-800');
             } else {
                 remarksBlock.classList.add('bg-success-light', 'text-success-dark');
             }
@@ -179,65 +182,13 @@
             }
         }
 
-        // The main application logic is now included in script.js and calls must be updated
-        // We will define the local fetch here for the sake of the single file mandate,
-        // and keep the handleSingleVerification in the shared script.js.
-
-        async function fetchVerification(rawAddress) {
-            // Placeholder API Key, replaced by the Canvas environment at runtime
-            const apiKey = ""; 
-            const API_URL = `api/verify-single-address.js`;
-
-            // Note: Since this is a self-contained file, the actual API call
-            // should point to your serverless function endpoint. For the canvas
-            // environment, we mock the fetch to point to the correct endpoint
-            // or assume the endpoint is configured elsewhere.
-            
-            // Assuming the `script.js` will handle the actual fetch to the Vercel API endpoint.
-            // This function is defined in script.js now, so we only need to call it.
-            
-            // To be robust within this single HTML file:
-            // We will define the complete logic for handleSingleVerification here and remove the stub from script.js
-
-            const payload = {
-                rawAddress: rawAddress,
-            };
-
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    // Pass the API key if necessary, or assume the endpoint handles authentication
-                    'X-API-Key': apiKey, 
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || `Server returned error status: ${response.status}`);
-            }
-
-            return response.json();
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            const verifyButton = document.getElementById('verifyButton');
-            if (verifyButton) {
-                verifyButton.addEventListener('click', handleSingleVerification);
-            }
-        });
-
-
-        // This function is duplicated from script.js, but must be complete in the single HTML file
         async function handleSingleVerification() {
             const rawAddress = document.getElementById('rawAddress').value;
-            // Removed customerName input
             const loadingMessage = document.getElementById('loading-message');
             const resultsContainer = document.getElementById('resultsContainer');
             const verifyButton = document.getElementById('verifyButton');
             
-            // Simple custom modal/message box instead of alert()
+            // Validation check (now for only rawAddress)
             if (rawAddress.trim() === "") {
                 showMessage('loading-message', "Please enter a raw address to verify.", true);
                 loadingMessage.classList.remove('hidden');
@@ -253,14 +204,11 @@
             verifyButton.textContent = 'Verifying...';
 
             try {
-                // Call the API endpoint (assuming the API_ENDPOINT constant is available or defined)
-                const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
-
-                // We are not passing customerName anymore
+                // Pass an empty customerName to the API, which will ignore it
                 const verificationResult = await fetch(API_ENDPOINT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ rawAddress: rawAddress })
+                    body: JSON.stringify({ rawAddress: rawAddress, customerName: "" })
                 }).then(res => {
                     if (!res.ok) {
                         return res.json().then(error => {
@@ -279,8 +227,7 @@
                 loadingMessage.classList.add('hidden');
                 resultsContainer.classList.remove('hidden');
 
-                // Populate results
-                // document.getElementById('out-name').textContent = verificationResult.customerCleanName || 'N/A'; // REMOVED
+                // Populate results (Note: out-name field is removed from HTML)
                 document.getElementById('out-address').textContent = verificationResult.addressLine1 || 'N/A';
                 document.getElementById('out-landmark').textContent = verificationResult.landmark || 'N/A';
                 document.getElementById('out-district').textContent = verificationResult.district || 'N/A';
