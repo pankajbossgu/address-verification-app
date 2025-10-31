@@ -1,310 +1,252 @@
-// api/verify-single-address.js
-// Vercel Serverless Function (Node.js)
-
-// --- 1. CONFIGURATION AND UTILITIES ---
-const INDIA_POST_API = 'https://api.postalpincode.in/pincode/';
-let pincodeCache = {}; 
-
-const testingKeywords = ['test', 'testing', 'asdf', 'qwer', 'zxcv', 'random', 'gjnj', 'fgjnj']; 
-const coreMeaningfulWords = [
-    "ddadu", "ddadu", "ai", "add", "add-", "raw", "dumping", "grand", "dumping grand",
-    "chd", "chd-", "chandigarh", "chandigarh-", "chandigarh", "west", "sector", "sector-",
-    "house", "no", "no#", "house no", "house no#", "floor", "first", "first floor",
-    "majra", "colony", "dadu", "dadu majra", "shop", "wine", "wine shop", "house", "number",
-    "tq", "job", "dist"
-];
-
-// Combine both lists for comprehensive cleanup
-const meaningfulWords = [...coreMeaningfulWords, ...testingKeywords];
-
-const meaninglessRegex = new RegExp(`\\b(?:${meaningfulWords.join('|')})\\b`, 'gi');
-// directionalKeywords array is used for the Landmark Prefix Logic
-const directionalKeywords = ['near', 'opposite', 'back side', 'front side', 'behind', 'opp']; 
-
-
-async function getIndiaPostData(pin) {
-    if (pincodeCache[pin]) return pincodeCache[pin];
-
-    try {
-        const response = await fetch(INDIA_POST_API + pin);
-        const data = await response.json();
-        const postData = data[0];
-
-        if (response.status !== 200 || postData.Status !== 'Success') {
-            pincodeCache[pin] = { PinStatus: 'Error' };
-            return pincodeCache[pin];
-        }
-
-        const postOffices = postData.PostOffice.map(po => ({
-            Name: po.Name || '',
-            Taluk: po.Taluk || po.SubDistrict || '',
-            District: po.District || '',
-            State: po.State || ''
-        }));
-
-        pincodeCache[pin] = {
-            PinStatus: 'Success',
-            PostOfficeList: postOffices,
-        };
-        return pincodeCache[pin];
-    } catch (e) {
-        console.error("India Post API Error:", e.message);
-        pincodeCache[pin] = { PinStatus: 'Error' };
-        return pincodeCache[pin];
-    }
-}
-
-
-async function getGeminiResponse(prompt) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-        return { text: null, error: "Gemini API key not set in Vercel environment variables." };
-    }
-
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
-    const requestBody = {
-        contents: [{ parts: [{ text: prompt }] }],
-    };
-
-    const options = {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody)
-    };
-
-    try {
-        const response = await fetch(apiUrl, options);
-        const result = await response.json();
-
-        if (response.status !== 200) {
-            const errorMessage = `Gemini API Error: ${result.error?.message || "Unknown error."}`;
-            console.error(errorMessage);
-            return { text: null, error: errorMessage };
-        }
-
-        if (result.candidates && result.candidates.length > 0) {
-            return { text: result.candidates[0].content.parts[0].text, error: null };
-        } else {
-            const errorMessage = "Gemini API Error: No candidates found in response.";
-            console.error(errorMessage);
-            return { text: null, error: errorMessage };
-        }
-    } catch (e) {
-        const errorMessage = `Error during Gemini API call: ${e.message}`;
-        console.error(errorMessage);
-        return { text: null, error: errorMessage };
-    }
-}
-
-function extractPin(address) {
-    const match = String(address).match(/\b\d{6}\b/);
-    return match ? match[0] : null;
-}
-
-function buildGeminiPrompt(originalAddress, postalData) {
-    let basePrompt = `You are an expert Indian address verifier and formatter. Your task is to process a raw address, perform a thorough analysis, and provide a comprehensive response in a single JSON object. Provide all responses in English only. Strictly translate all extracted address components to English. Correct all common spelling and phonetic errors in the provided address, such as "rd" to "Road", "nager" to "Nagar", and "nd" to "2nd". Analyze common short forms and phonetic spellings, such as "lean" for "Lane", and use your best judgment to correct them. Be strict about ensuring the output is a valid, single, and complete address for shipping. Use your advanced knowledge to identify and remove any duplicate address components that are present consecutively (e.g., 'Gandhi Street Gandhi Street' should be 'Gandhi Street').
-
-Your response must contain the following keys:
-1.  "H.no.", "Flat No.", "Plot No.", "Room No.", "Building No.", "Block No.", "Ward No.", "Gali No.", "Zone No.": Extract only the number or alphanumeric sequence (e.g., '1-26', 'A/25', '10'). Set to null if not found.
-2.  "Colony", "Street", "Locality", "Building Name", "House Name", "Floor": Extract the name.
-3.  "P.O.": The official Post Office name from the PIN data. Prepend "P.O." to the name. Example: "P.O. Boduppal".
-4.  "Tehsil": The official Tehsil/SubDistrict from the PIN data. Prepend "Tehsil". Example: "Tehsil Pune".
-5.  "DIST.": The official District from the PIN data.
-6.  "State": The official State from the PIN data.
-7.  "PIN": The 6-digit PIN code. Find and verify the correct PIN. If a PIN exists in the raw address but is incorrect, find the correct one and provide it.
-8.  "Landmark": A specific, named landmark (e.g., "Apollo Hospital"), not a generic type like "school". If multiple landmarks are present, list them comma-separated. **Extract the landmark without any directional words like 'near', 'opposite', 'behind' etc., as this will be handled by the script.**
-9.  "Remaining": A last resort for any text that does not fit into other fields. Clean this by removing meaningless words like 'job', 'raw', 'add-', 'tq', 'dist' and country, state, district, or PIN code.
-10. "FormattedAddress": This is the most important field. Based on your full analysis, create a single, clean, human-readable, and comprehensive shipping-ready address string. It should contain all specific details (H.no., Room No., etc.), followed by locality, street, colony, P.O., Tehsil, and District. DO NOT include the State or PIN in this string. Use commas to separate logical components. Do not invent or "hallucinate" information.
-11. "LocationType": Identify the type of location (e.g., "Village", "Town", "City", "Urban Area").
-12. "AddressQuality": Analyze the address completeness and clarity for shipping. Categorize it as one of the following: Very Good, Good, Medium, Bad, or Very Bad.
-13. "LocationSuitability": Analyze the location based on its State, District, and PIN to determine courier-friendliness in India. Categorize it as one of the following: Prime Location, Tier 1 & 2 Cities, Remote/Difficult Location, or Non-Serviceable Location.
-
-Raw Address: "${originalAddress}"
-`;
-
-    if (postalData.PinStatus === 'Success') {
-        basePrompt += `\nOfficial Postal Data: ${JSON.stringify(postalData.PostOfficeList)}\nUse this list to find the best match for 'P.O.', 'Tehsil', and 'DIST.' fields.`;
-    } else {
-        basePrompt += `\nAddress has no PIN or the PIN is invalid. You must find and verify the correct 6-digit PIN. If you cannot find a valid PIN, set "PIN" to null and provide the best available data.`;
-    }
-    
-    // Add the JSON output instruction
-    basePrompt += `\nYour entire response MUST be a single, valid JSON object starting with { and ending with } and contain ONLY the keys listed above.`;
-
-    return basePrompt;
-}
-
-function processAddress(address, postalData) {
-    const prompt = buildGeminiPrompt(address, postalData);
-    return getGeminiResponse(prompt);
-}
-
-// --- 2. MAIN HANDLER ---
-
-module.exports = async (req, res) => {
-    // START OF CORS FIX (Step 36)
-    res.setHeader('Access-Control-Allow-Credentials', true);
-    res.setHeader('Access-Control-Allow-Origin', 'https://pankajbossgu.github.io');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
-    
-    if (req.method === 'OPTIONS') {
-        res.status(200).end();
-        return;
-    }
-
-    if (req.method !== 'POST') {
-        res.status(405).json({ status: "Error", error: 'Method Not Allowed' });
-        return;
-    }
-    // END OF CORS FIX
-
-    try {
-        const { address, customerName } = req.body;
-        let remarks = []; // Initialize remarks array
-        
-        if (!address) {
-            return res.status(400).json({ status: "Error", error: "Address is required." });
-        }
-
-        const cleanedName = customerName.replace(/[^\w\s]/gi, '').replace(/\s+/g, ' ').trim() || null;
-        const initialPin = extractPin(address);
-        let postalData = { PinStatus: 'Error' };
-        
-        if (initialPin) {
-            postalData = await getIndiaPostData(initialPin);
-        }
-
-        // 1. Call Gemini API
-        const geminiResult = await processAddress(address, postalData);
-        if (geminiResult.error || !geminiResult.text) {
-            return res.status(500).json({ status: "Error", error: geminiResult.error || "Gemini API failed to return text." });
-        }
-
-        // 2. Parse Gemini JSON output
-        let parsedData;
-        try {
-            // Attempt to clean up and parse the JSON string
-            const jsonText = geminiResult.text.replace(/```json|```/g, '').trim();
-            parsedData = JSON.parse(jsonText);
-        } catch (e) {
-            console.error("JSON Parsing Error:", e.message);
-            // VITAL: Add critical alert for JSON failure
-            remarks.push(`CRITICAL_ALERT: JSON parse failed. Raw Gemini Output: ${geminiResult.text.substring(0, 50)}...`);
-            // Continue with fallback data
-            parsedData = {
-                FormattedAddress: address.replace(meaninglessRegex, '').trim(),
-                Landmark: '',
-                State: '',
-                DIST: '',
-                PIN: initialPin,
-                AddressQuality: 'Very Bad',
-                Remaining: remarks[0], // Use the error as remaining
-            };
-        }
-
-        // 3. --- PIN VERIFICATION & CORRECTION LOGIC ---
-        let finalPin = String(parsedData.PIN).match(/\b\d{6}\b/) ? parsedData.PIN : initialPin;
-        let primaryPostOffice = postalData.PostOfficeList ? postalData.PostOfficeList[0] : {};
-
-        if (finalPin) {
-            // Re-run India Post lookup if PIN is different or original lookup failed
-            if (postalData.PinStatus !== 'Success' || (initialPin && finalPin !== initialPin)) {
-                const aiPostalData = await getIndiaPostData(finalPin);
-
-                if (aiPostalData.PinStatus === 'Success') {
-                    // AI PIN is valid, use its data and update Post Office details
-                    postalData = aiPostalData;
-                    primaryPostOffice = postalData.PostOfficeList[0] || {};
-                    
-                    // Add PIN correction remarks
-                    if (initialPin && initialPin !== finalPin) {
-                        remarks.push(`CRITICAL_ALERT: Wrong PIN (${initialPin}) corrected to (${finalPin}).`);
-                    } else if (!initialPin) {
-                        remarks.push(`Correct PIN (${finalPin}) added by AI.`);
-                    }
-                } else {
-                    // AI PIN also failed API check, warn the user and revert PIN if possible
-                    remarks.push(`CRITICAL_ALERT: AI-provided PIN (${finalPin}) not verified by API.`);
-                    finalPin = initialPin; // Revert to original, which might be valid or invalid
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Single Address Verification</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary-blue': '#1D4ED8', // Dark Blue
+                        'secondary-green': '#059669', // Dark Green
+                        'neutral-gray': '#E5E7EB',
+                        'success-light': '#D1FAE5',
+                        'success-dark': '#065F46',
+                        'alert-light': '#FEE2E2', // Red-100
+                        'alert-dark': '#991B1B', // Red-800
+                        'yellow-100': '#FEF3C7',
+                        'yellow-800': '#92400E',
+                        'yellow-300': '#FCD34D',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
                 }
-            } else if (initialPin && postalData.PinStatus === 'Success') {
-                remarks.push(`PIN (${initialPin}) verified successfully.`);
             }
-        } else {
-            // If neither original nor AI could find a valid PIN
-            remarks.push("CRITICAL_ALERT: PIN not found after verification attempts. Manual check needed.");
-            finalPin = initialPin || null; // Fallback to initialPin even if invalid, for user reference
         }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Style for the remarks block to ensure it's easily targetable for the alert class */
+        .remarks-block {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-neutral-gray min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-2xl bg-white p-8 sm:p-10 rounded-xl shadow-2xl border border-gray-100">
+
+        <a href="index.html" class="text-primary-blue hover:text-blue-700 font-medium mb-6 inline-flex items-center transition duration-150">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+            Back to Home
+        </a>
+
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-extrabold text-gray-900">
+                Verify Single Address
+            </h1>
+            <p class="text-md text-gray-500 mt-2">Enter a raw address below to clean, normalize, and verify its geographic details.</p>
+        </header>
         
-        // 3.5. --- Short Address Check ---
-        if (parsedData.FormattedAddress && parsedData.FormattedAddress.length < 35 && parsedData.AddressQuality !== 'Very Good' && parsedData.AddressQuality !== 'Good') {
-             remarks.push(`CRITICAL_ALERT: Formatted address is short (${parsedData.FormattedAddress.length} chars). Manual verification recommended.`);
+        <div class="space-y-6">
+            
+            <div>
+                <label for="rawAddress" class="block text-lg font-semibold text-gray-700 mb-2">Raw Address</label>
+                <textarea id="rawAddress" rows="4" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-blue focus:border-primary-blue transition duration-150 shadow-sm" placeholder="Enter the full, uncleaned address here..."></textarea>
+            </div>
+
+            <button id="verifyButton" class="w-full py-3 px-4 bg-secondary-green text-white font-bold text-lg rounded-lg shadow-md transition duration-300 transform hover:scale-[1.01] hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-secondary-green focus:ring-opacity-50">
+                Verify Address
+            </button>
+        </div>
+
+        <div id="loading-message" class="hidden mt-8 p-4 text-center rounded-lg bg-yellow-100 text-yellow-800 font-medium transition duration-300 shadow-inner">
+            Processing... Please wait.
+        </div>
+
+        <div id="resultsContainer" class="mt-8 pt-6 border-t border-gray-200 hidden">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 text-center">Verification Results</h2>
+
+            <div id="remarks-block" class="remarks-block p-4 mb-6 rounded-lg shadow-md text-sm font-medium transition duration-300 ease-in-out bg-success-light text-success-dark">
+                <p id="out-remarks"></p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <p class="text-xs font-semibold uppercase text-gray-500">Cleaned Address Line</p>
+                    <div class="flex justify-between items-center mt-1">
+                        <span id="out-address" class="text-gray-800 font-medium truncate">N/A</span>
+                        <button onclick="copyToClipboard('out-address', this)" class="text-primary-blue hover:text-blue-700 text-sm ml-2 p-1 rounded transition duration-150">Copy</button>
+                    </div>
+                </div>
+                <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <p class="text-xs font-semibold uppercase text-gray-500">Landmark</p>
+                    <div class="flex justify-between items-center mt-1">
+                        <span id="out-landmark" class="text-gray-800 font-medium truncate">N/A</span>
+                        <button onclick="copyToClipboard('out-landmark', this)" class="text-primary-blue hover:text-blue-700 text-sm ml-2 p-1 rounded transition duration-150">Copy</button>
+                    </div>
+                </div>
+                <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <p class="text-xs font-semibold uppercase text-gray-500">Pincode (PIN)</p>
+                    <div class="flex justify-between items-center mt-1">
+                        <span id="out-pin" class="text-gray-800 font-medium truncate">N/A</span>
+                        <button onclick="copyToClipboard('out-pin', this)" class="text-primary-blue hover:text-blue-700 text-sm ml-2 p-1 rounded transition duration-150">Copy</button>
+                    </div>
+                </div>
+                <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <p class="text-xs font-semibold uppercase text-gray-500">District</p>
+                    <span id="out-district" class="text-gray-800 font-medium mt-1 block truncate">N/A</span>
+                </div>
+                <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <p class="text-xs font-semibold uppercase text-gray-500">State</p>
+                    <span id="out-state" class="text-gray-800 font-medium mt-1 block truncate">N/A</span>
+                </div>
+                <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <p class="text-xs font-semibold uppercase text-gray-500">Address Quality</p>
+                    <span id="out-quality" class="text-gray-800 font-medium mt-1 block truncate">N/A</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // The API endpoint for the serverless function
+        const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const verifyButton = document.getElementById('verifyButton');
+            if (verifyButton) {
+                verifyButton.addEventListener('click', handleSingleVerification);
+            }
+        });
+
+        // Custom helper functions
+        function showMessage(elementId, message, isError = false) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.textContent = message;
+            el.classList.remove('hidden', 'bg-red-100', 'text-red-800', 'bg-yellow-100', 'text-yellow-800');
+            el.classList.add(isError ? 'bg-red-100' : 'bg-yellow-100', isError ? 'text-red-800' : 'text-yellow-800');
         }
 
+        function applyRemarksStyle(remarks) {
+            const remarksBlock = document.getElementById('remarks-block');
+            const remarksText = document.getElementById('out-remarks');
+            const remarksContent = remarks || 'Address verified successfully with high confidence.';
 
-        // 4. --- Directional Prefix Logic for Landmark ---
-        let landmarkValue = parsedData.Landmark || '';
-        const originalAddressLower = address.toLowerCase();
-        let finalLandmark = '';
+            remarksText.textContent = remarksContent;
 
-        if (landmarkValue.toString().trim() !== '') {
-            const foundDirectionalWord = directionalKeywords.find(keyword => originalAddressLower.includes(keyword));
-            
-            if (foundDirectionalWord) {
-                // Find the original spelling of the directional word in the raw address
-                const originalDirectionalWordMatch = address.match(new RegExp(`\\b${foundDirectionalWord.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i'));
-                const originalDirectionalWord = originalDirectionalWordMatch ? originalDirectionalWordMatch[0] : foundDirectionalWord;
-                
-                // Capitalize the first letter for clean display
-                const prefixedWord = originalDirectionalWord.charAt(0).toUpperCase() + originalDirectionalWord.slice(1);
-                
-                finalLandmark = `${prefixedWord} ${landmarkValue.toString().trim()}`;
+            remarksBlock.classList.remove('bg-success-light', 'text-success-dark', 'bg-alert-light', 'text-alert-dark', 'bg-yellow-100', 'text-yellow-800');
+
+            // If remarks indicate a critical issue (e.g., major correction or failure), apply alert style
+            if (remarksContent.toLowerCase().includes('no pincode found') || remarksContent.toLowerCase().includes('could not be parsed') || remarksContent.toLowerCase().includes('was significantly corrected')) {
+                remarksBlock.classList.add('bg-alert-light', 'text-alert-dark');
+            } else if (remarksContent.toLowerCase().includes('warning')) {
+                // For general warnings (e.g., Post Office verification failed)
+                 remarksBlock.classList.add('bg-yellow-100', 'text-yellow-800');
             } else {
-                // If no directional word is found, use "Near" as the default
-                finalLandmark = `Near ${landmarkValue.toString().trim()}`;
+                remarksBlock.classList.add('bg-success-light', 'text-success-dark');
             }
         }
-        
-        // Final Remarks cleanup and addition
-        if (parsedData.Remaining && parsedData.Remaining.trim() !== '') {
-            remarks.push(`Remaining/Ambiguous Text: ${parsedData.Remaining.trim()}`);
-        } else if (remarks.length === 0) {
-            remarks.push('Address verified and formatted successfully.');
+
+        function copyToClipboard(elementId, button) {
+            const element = document.getElementById(elementId);
+            const text = element.textContent;
+
+            // Use document.execCommand('copy') for compatibility in iFrame environments
+            try {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.classList.remove('text-primary-blue', 'hover:text-blue-700');
+                button.classList.add('text-secondary-green');
+
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('text-secondary-green');
+                    button.classList.add('text-primary-blue', 'hover:text-blue-700');
+                }, 1500);
+
+            } catch (err) {
+                console.error('Could not copy text: ', err);
+            }
         }
 
-
-        // 5. Construct the Final JSON Response
-        const finalResponse = {
-            status: "Success",
-            customerRawName: customerName,
-            customerCleanName: cleanedName,
+        async function handleSingleVerification() {
+            const rawAddress = document.getElementById('rawAddress').value;
+            const loadingMessage = document.getElementById('loading-message');
+            const resultsContainer = document.getElementById('resultsContainer');
+            const verifyButton = document.getElementById('verifyButton');
             
-            // Core Address Components
-            addressLine1: parsedData.FormattedAddress || address.replace(meaninglessRegex, '').trim() || '',
-            landmark: finalLandmark, // <<< UPDATED
+            // Validation check (now for only rawAddress)
+            if (rawAddress.trim() === "") {
+                showMessage('loading-message', "Please enter a raw address to verify.", true);
+                loadingMessage.classList.remove('hidden');
+                resultsContainer.classList.add('hidden');
+                return;
+            }
+
+            loadingMessage.classList.remove('hidden');
+            resultsContainer.classList.add('hidden');
+            showMessage('loading-message', 'Processing... Please wait.', false);
             
-            // Geographic Components (Prioritize India Post verification)
-            postOffice: primaryPostOffice.Name || parsedData['P.O.'] || '',
-            tehsil: primaryPostOffice.Taluk || parsedData.Tehsil || '',
-            district: primaryPostOffice.District || parsedData['DIST.'] || '',
-            state: primaryPostOffice.State || parsedData.State || '',
-            pin: finalPin, // <<< UPDATED
+            verifyButton.disabled = true;
+            verifyButton.textContent = 'Verifying...';
 
-            // Quality/Verification Metrics
-            addressQuality: parsedData.AddressQuality || 'Medium',
-            locationType: parsedData.LocationType || 'Unknown',
-            locationSuitability: parsedData.LocationSuitability || 'Unknown',
-            
-            // Remarks
-            remarks: remarks.join('; ').trim(), // <<< UPDATED: Send as a single string
-        };
+            try {
+                // Pass an empty customerName to the API, which will ignore it
+                const verificationResult = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rawAddress: rawAddress, customerName: "" })
+                }).then(res => {
+                    if (!res.ok) {
+                        return res.json().then(error => {
+                            throw new Error(error.error || `Server returned error status: ${res.status}`);
+                        });
+                    }
+                    return res.json();
+                });
 
-        return res.status(200).json(finalResponse);
+                // Check for server error status in the response body
+                if (verificationResult.status === "Error") {
+                    throw new Error(verificationResult.error);
+                }
 
-    } catch (e) {
-        console.error("Internal Server Error:", e);
-        return res.status(500).json({ status: "Error", error: `Internal Server Error: ${e.message}` });
-    }
-};
+                showMessage('loading-message', 'Verification successful!', false);
+                loadingMessage.classList.add('hidden');
+                resultsContainer.classList.remove('hidden');
+
+                // Populate results (Note: out-name field is removed from HTML)
+                document.getElementById('out-address').textContent = verificationResult.addressLine1 || 'N/A';
+                document.getElementById('out-landmark').textContent = verificationResult.landmark || 'N/A';
+                document.getElementById('out-district').textContent = verificationResult.district || 'N/A';
+                document.getElementById('out-state').textContent = verificationResult.state || 'N/A';
+                document.getElementById('out-pin').textContent = verificationResult.pin || 'N/A';
+                document.getElementById('out-quality').textContent = verificationResult.addressQuality || 'N/A';
+                
+                // Apply the new styling logic for remarks
+                applyRemarksStyle(verificationResult.remarks);
+                
+            } catch (e) {
+                showMessage('loading-message', `Verification failed: ${e.message}`, true);
+                loadingMessage.classList.remove('hidden'); 
+                resultsContainer.classList.add('hidden');
+            } finally {
+                verifyButton.disabled = false;
+                verifyButton.textContent = 'Verify Address';
+            }
+        }
+    </script>
+</body>
+</html>
