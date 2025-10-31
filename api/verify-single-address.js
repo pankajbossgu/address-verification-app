@@ -11,9 +11,7 @@ const coreMeaningfulWords = [
     "chd", "chd-", "chandigarh", "chandigarh-", "chandigarh", "west", "sector", "sector-",
     "house", "no", "no#", "house no", "house no#", "floor", "first", "first floor",
     "majra", "colony", "dadu", "dadu majra", "shop", "wine", "wine shop", "house", "number",
-    "tq", "job", "dist", 
-    // ADDED: Ambiguous words seen in recent data for stricter client-side cleanup
-    "sirf", "aata", "gp", "gram panchayat" 
+    "tq", "job", "dist"
 ];
 
 // Combine both lists for comprehensive cleanup
@@ -22,37 +20,6 @@ const meaningfulWords = [...coreMeaningfulWords, ...testingKeywords];
 const meaninglessRegex = new RegExp(`\\b(?:${meaningfulWords.join('|')})\\b`, 'gi');
 // directionalKeywords array is used for the Landmark Prefix Logic
 const directionalKeywords = ['near', 'opposite', 'back side', 'front side', 'behind', 'opp']; 
-
-// ADDED: List of prefixes/suffixes to remove from names
-const nameCleanupWords = [
-    'mr', 'mrs', 'ms', 'dr', 'prof', 'engr', 'pvt', 'ltd', 'private', 'limited', 'co', 'company',
-    'proprietor', 'prop', 'firm', 'group', 'the'
-];
-const nameCleanupRegex = new RegExp(`\\b(?:${nameCleanupWords.join('|')})\\b`, 'gi');
-
-/**
- * Standardizes and cleans the customer name.
- * @param {string} name - The raw customer name string.
- * @returns {string} The cleaned and standardized name.
- */
-function cleanCustomerName(name) {
-    if (!name) return null;
-    let cleaned = String(name)
-        // Remove special characters, keeping only letters, numbers, and spaces
-        .replace(/[^\w\s]/gi, '') 
-        // Remove common prefixes/suffixes (case-insensitive)
-        .replace(nameCleanupRegex, '')
-        // Replace multiple spaces with a single space
-        .replace(/\s+/g, ' ')
-        .trim();
-
-    // Capitalize each word (Title Case) for standardization
-    cleaned = cleaned.toLowerCase().split(' ').map((word) => {
-        return word.charAt(0).toUpperCase() + word.slice(1);
-    }).join(' ');
-
-    return cleaned || null;
-}
 
 
 async function getIndiaPostData(pin) {
@@ -136,7 +103,7 @@ function extractPin(address) {
 }
 
 function buildGeminiPrompt(originalAddress, postalData) {
-    let basePrompt = `You are an expert Indian address verifier and formatter. Your task is to process a raw address, perform a thorough analysis, and provide a comprehensive response in a single JSON object. **CRITICAL INSTRUCTION: Analyze ALL location-related text and integrate it fully into the 'FormattedAddress' and other component fields (Colony, Street, etc.). The 'Remaining' field must ONLY contain truly meaningless, junk, or non-address text that cannot be mapped to any logical address component. For a successful verification, 'Remaining' must be empty or null. **ABSOLUTELY DO NOT** place any names of Banks, Hospitals, Schools, or recognized Locality/Street names into the 'Remaining' field.** **STRICT REQUIREMENT: The entire response, especially all address components, MUST be in clear, standardized English. If the raw address contains any text in a local language (e.g., Hindi, Tamil) or "Hinglish," you MUST strictly translate and transliterate it into standard English (e.g., 'Gali No. 2', not 'galee 2').** Correct all common spelling and phonetic errors in the provided address, such as "rd" to "Road", "nager" to "Nagar", and "nd" to "2nd". Analyze common short forms and phonetic spellings, such as "lean" for "Lane", and use your best judgment to correct them. Be strict about ensuring the output is a valid, single, and complete address for shipping. CRITICAL INSTRUCTION: If the address contains a company name (e.g., 'Stahl india company'), use external knowledge to find its official, full name (e.g., 'Stahl India Pvt. Ltd.'). Use this corrected, official name as the primary entity and prepend it to the 'FormattedAddress'. Do not include the corrected company name in the 'Remaining' field. Use your advanced knowledge to identify and remove any duplicate address components that are present consecutively (e.g., 'Gandhi Street Gandhi Street' should be 'Gandhi Street').
+    let basePrompt = `You are an expert Indian address verifier and formatter. Your task is to process a raw address, perform a thorough analysis, and provide a comprehensive response in a single JSON object. Provide all responses in English only. Strictly translate all extracted address components to English. Correct all common spelling and phonetic errors in the provided address, such as "rd" to "Road", "nager" to "Nagar", and "nd" to "2nd". Analyze common short forms and phonetic spellings, such as "lean" for "Lane", and use your best judgment to correct them. Be strict about ensuring the output is a valid, single, and complete address for shipping. Use your advanced knowledge to identify and remove any duplicate address components that are present consecutively (e.g., 'Gandhi Street Gandhi Street' should be 'Gandhi Street').
 
 Your response must contain the following keys:
 1.  "H.no.", "Flat No.", "Plot No.", "Room No.", "Building No.", "Block No.", "Ward No.", "Gali No.", "Zone No.": Extract only the number or alphanumeric sequence (e.g., '1-26', 'A/25', '10'). Set to null if not found.
@@ -147,7 +114,7 @@ Your response must contain the following keys:
 6.  "State": The official State from the PIN data.
 7.  "PIN": The 6-digit PIN code. Find and verify the correct PIN. If a PIN exists in the raw address but is incorrect, find the correct one and provide it.
 8.  "Landmark": A specific, named landmark (e.g., "Apollo Hospital"), not a generic type like "school". If multiple landmarks are present, list them comma-separated. **Extract the landmark without any directional words like 'near', 'opposite', 'behind' etc., as this will be handled by the script.**
-9.  "Remaining": A last resort for any text that does not fit into other fields. **It must be empty for a well-verified address.** Clean this by removing meaningless words like 'job', 'raw', 'add-', 'tq', 'dist' and country, state, district, or PIN code. **DO NOT include any valid location names in this field.**
+9.  "Remaining": A last resort for any text that does not fit into other fields. Clean this by removing meaningless words like 'job', 'raw', 'add-', 'tq', 'dist' and country, state, district, or PIN code.
 10. "FormattedAddress": This is the most important field. Based on your full analysis, create a single, clean, human-readable, and comprehensive shipping-ready address string. It should contain all specific details (H.no., Room No., etc.), followed by locality, street, colony, P.O., Tehsil, and District. DO NOT include the State or PIN in this string. Use commas to separate logical components. Do not invent or "hallucinate" information.
 11. "LocationType": Identify the type of location (e.g., "Village", "Town", "City", "Urban Area").
 12. "AddressQuality": Analyze the address completeness and clarity for shipping. Categorize it as one of the following: Very Good, Good, Medium, Bad, or Very Bad.
@@ -201,8 +168,7 @@ module.exports = async (req, res) => {
             return res.status(400).json({ status: "Error", error: "Address is required." });
         }
 
-        // UPDATED: Use the new dedicated cleaning function
-        const cleanedName = cleanCustomerName(customerName);
+        const cleanedName = customerName.replace(/[^\w\s]/gi, '').replace(/\s+/g, ' ').trim() || null;
         const initialPin = extractPin(address);
         let postalData = { PinStatus: 'Error' };
         
@@ -301,23 +267,10 @@ module.exports = async (req, res) => {
             }
         }
         
-        // ----------------------------------------------------------------------
-        // CRITICAL FIX: Explicitly clean the Remaining field before checking it
-        // ----------------------------------------------------------------------
-        let finalRemaining = parsedData.Remaining || '';
-        // Apply the cleaning regex to remove meaningless words and trim whitespace
-        finalRemaining = finalRemaining.replace(meaninglessRegex, '').trim();
-        // Consolidate any multiple spaces left by the regex replacement
-        finalRemaining = finalRemaining.replace(/\s{2,}/g, ' ');
-
-        if (finalRemaining !== '') {
-            // If anything is left after the client-side scrub, it is truly ambiguous
-            remarks.push(`Ambiguous Text: ${finalRemaining}`);
-        }
-        // ----------------------------------------------------------------------
-        
-        // Add success message only if no other critical remarks exist
-        if (remarks.length === 0) {
+        // Final Remarks cleanup and addition
+        if (parsedData.Remaining && parsedData.Remaining.trim() !== '') {
+            remarks.push(`Remaining/Ambiguous Text: ${parsedData.Remaining.trim()}`);
+        } else if (remarks.length === 0) {
             remarks.push('Address verified and formatted successfully.');
         }
 
@@ -326,18 +279,18 @@ module.exports = async (req, res) => {
         const finalResponse = {
             status: "Success",
             customerRawName: customerName,
-            customerCleanName: cleanedName, 
+            customerCleanName: cleanedName,
             
             // Core Address Components
             addressLine1: parsedData.FormattedAddress || address.replace(meaninglessRegex, '').trim() || '',
-            landmark: finalLandmark, 
+            landmark: finalLandmark, // <<< UPDATED
             
             // Geographic Components (Prioritize India Post verification)
             postOffice: primaryPostOffice.Name || parsedData['P.O.'] || '',
             tehsil: primaryPostOffice.Taluk || parsedData.Tehsil || '',
             district: primaryPostOffice.District || parsedData['DIST.'] || '',
             state: primaryPostOffice.State || parsedData.State || '',
-            pin: finalPin, 
+            pin: finalPin, // <<< UPDATED
 
             // Quality/Verification Metrics
             addressQuality: parsedData.AddressQuality || 'Medium',
@@ -345,7 +298,7 @@ module.exports = async (req, res) => {
             locationSuitability: parsedData.LocationSuitability || 'Unknown',
             
             // Remarks
-            remarks: remarks.join('; ').trim(), 
+            remarks: remarks.join('; ').trim(), // <<< UPDATED: Send as a single string
         };
 
         return res.status(200).json(finalResponse);
