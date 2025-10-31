@@ -64,7 +64,7 @@
             </div>
 
             <button id="processButton" class="w-full py-3 bg-secondary-green text-white font-bold text-lg rounded-lg shadow-xl transition duration-200 transform hover:scale-[1.01] focus:outline-none focus:ring-4 focus:ring-secondary-green focus:ring-opacity-50" disabled>
-                🚀 Start Verification
+                Start Verification
             </button>
         </div>
 
@@ -106,7 +106,7 @@
             }
         });
 
-        // NEW: Function to handle status message display, including errors
+        // Function to handle status message display, including errors
         function updateStatusMessage(message, isError = false) {
             const statusMessage = document.getElementById('status-message');
             statusMessage.textContent = message;
@@ -316,8 +316,8 @@
                     const progress = (processedCount / totalAddresses) * 100;
                     progressBarFill.style.width = `${progress}%`;
                     
-                    // NEW: Detailed status message during processing
-                    updateStatusMessage(`Processing... ${processedCount} of ${totalAddresses} addresses completed. Last address: "${rawAddress.substring(0, 50).trim()}..."`);
+                    // UPDATED: Simple status message showing only progress count
+                    updateStatusMessage(`Processing... ${processedCount} of ${totalAddresses} addresses completed.`);
                 }
 
                 updateStatusMessage(`Processing complete! ${totalAddresses} addresses verified. Click 'Download Verified CSV'.`, false);
