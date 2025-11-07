@@ -23,6 +23,29 @@
                 }
             }
         }
+        
+        /**
+         * Function to prompt the user for the Bulk Access Code 
+         * and save it to session storage before navigating.
+         */
+        function promptForBulkAccess(event) {
+            // Prevent the default link action (which would navigate immediately)
+            event.preventDefault(); 
+            
+            // IMPORTANT: Prompt the user for the code
+            const accessCode = prompt("🔐 Enter Access Code for Bulk Verification:");
+            
+            if (accessCode && accessCode.trim() !== '') {
+                // If a code is entered, save it to session storage 
+                // so the bulk handler can retrieve it later.
+                sessionStorage.setItem('bulkAccessCode', accessCode.trim());
+                
+                // Now, navigate to the bulk page
+                window.location.href = "bulk.html";
+            } else {
+                alert("Bulk verification cancelled. Access code is required.");
+            }
+        }
     </script>
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -36,7 +59,6 @@
             <h1 class="text-4xl font-extrabold text-gray-900 mb-2">
                 <span class="text-primary-blue">AI Address</span> Verification
             </h1>
-            <!-- UPDATED: Replaced 'Gemini' with 'advanced AI' -->
             <p class="text-lg text-gray-500 mt-2">Choose a method to clean, normalize, and verify addresses using advanced AI.</p>
         </header>
         
@@ -46,7 +68,7 @@
                 <span class="mr-2">📝</span> Verify Single Address
             </a>
             
-            <a href="bulk.html" class="block w-full text-center py-4 px-6 bg-accent-yellow text-gray-900 font-bold text-xl rounded-lg shadow-md transition duration-300 transform hover:scale-[1.02] hover:bg-yellow-500 focus:outline-none focus:ring-4 focus:ring-accent-yellow focus:ring-opacity-50">
+            <a href="#" onclick="promptForBulkAccess(event)" class="block w-full text-center py-4 px-6 bg-accent-yellow text-gray-900 font-bold text-xl rounded-lg shadow-md transition duration-300 transform hover:scale-[1.02] hover:bg-yellow-500 focus:outline-none focus:ring-4 focus:ring-accent-yellow focus:ring-opacity-50">
                 <span class="mr-2">📦</span> Bulk Address Verification
             </a>
         </div>
