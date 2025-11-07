@@ -120,12 +120,20 @@ function handleTemplateDownload() {
     document.body.removeChild(link);
 }
 
-async function fetchVerification(address, name) {
+// MODIFIED: Added accessCode parameter
+async function fetchVerification(address, name, accessCode = null) {
     try {
+        // MODIFIED: Create bodyData and conditionally add accessCode
+        const bodyData = { address: address, customerName: name };
+        
+        if (accessCode) {
+            bodyData.accessCode = accessCode;
+        }
+
         const response = await fetch(API_ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ address: address, customerName: name })
+            body: JSON.stringify(bodyData) // Use bodyData
         });
         
         let result = {};
@@ -146,16 +154,17 @@ async function fetchVerification(address, name) {
         if (response.ok && result.status === "Success") {
             return result;
         } else {
+            // Updated to handle 401 errors gracefully
             return {
                 status: "Error",
                 customerCleanName: name,
-                addressLine1: "API Error",
-                landmark: "",
-                state: "",
-                district: "",
-                pin: "",
+                addressLine1: result.addressLine1 || "API Error",
+                landmark: result.landmark || "",
+                state: result.state || "",
+                district: result.district || "",
+                pin: result.pin || "",
                 remarks: `API Failed: ${result.error || result.remarks || 'Unknown Server Error.'}`,
-                addressQuality: "BAD"
+                addressQuality: result.addressQuality || "BAD"
             };
         }
     } catch (e) {
@@ -192,6 +201,14 @@ async function handleBulkVerification() {
         alert("Please select a CSV file.");
         return;
     }
+
+    // --- NEW: Prompt for the access code ---
+    const accessCode = prompt("Enter Access Code for Bulk Verification:");
+    if (!accessCode) {
+        alert("Bulk verification cancelled. Access code is required.");
+        return;
+    }
+    // --- END NEW PROMPT ---
 
     const processButton = document.getElementById('processButton');
     const statusMessage = document.getElementById('status-message');
@@ -255,7 +272,8 @@ async function handleBulkVerification() {
                     addressQuality: "BAD"
                 };
             } else {
-                verificationResult = await fetchVerification(rawAddress, customerName);
+                // MODIFIED: Pass accessCode to fetchVerification
+                verificationResult = await fetchVerification(rawAddress, customerName, accessCode);
             }
 
             const outputRow = [
