@@ -6,6 +6,9 @@
     <title>AI Address Verification</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+        // Set the API endpoint for quick verification
+        const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
+
         // Re-use your color palette for consistency
         tailwind.config = {
             theme: {
@@ -15,6 +18,8 @@
                         'secondary-green': '#059669', // Dark Green
                         'neutral-gray': '#E5E7EB',
                         'accent-yellow': '#FCD34D', // A nice accent for the bulk button
+                        'danger-red': '#DC2626', // Red for error messages
+                        'whatsapp-green': '#25D366', // Official WhatsApp green
                     },
                     fontFamily: {
                         // Ensure consistent font
@@ -23,9 +28,102 @@
                 }
             }
         }
+        
+        /**
+         * Function to show the custom access code modal.
+         */
+        function showAccessModal(event) {
+            // Prevent the default link action (which would navigate immediately)
+            event.preventDefault(); 
+            document.getElementById('accessModal').classList.remove('hidden');
+        }
+
+        /**
+         * Function to hide the custom access code modal.
+         */
+        function hideAccessModal() {
+            document.getElementById('accessModal').classList.add('hidden');
+            // Clear inputs and messages on close
+            document.getElementById('accessCodeInput').value = '';
+            document.getElementById('modalErrorMessage').textContent = '';
+        }
+
+        /**
+         * Function to handle the actual verification when the modal button is clicked.
+         */
+        async function verifyAccessCode() {
+            const inputField = document.getElementById('accessCodeInput');
+            const errorMessage = document.getElementById('modalErrorMessage');
+            const verifyButton = document.getElementById('modalVerifyButton');
+            
+            const accessCode = inputField.value.trim();
+            errorMessage.textContent = ''; // Clear previous errors
+            
+            if (accessCode === '') {
+                errorMessage.textContent = "Please enter the access code.";
+                return;
+            }
+
+            verifyButton.disabled = true;
+            verifyButton.textContent = 'Verifying...';
+            inputField.disabled = true;
+
+            try {
+                // 1. Send the code to the Vercel API for verification (quickCheck: true)
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        accessCode: accessCode,
+                        // Signal the backend to ONLY check the code
+                        quickCheck: true 
+                    })
+                });
+
+                // 2. Check the response status
+                if (response.status === 200) {
+                    // Success! Code is correct.
+                    sessionStorage.setItem('bulkAccessCode', accessCode);
+                    hideAccessModal();
+                    // Redirect the user
+                    window.location.href = "bulk.html";
+                } else if (response.status === 401) {
+                    // Unauthorized - Code is wrong
+                    errorMessage.textContent = "❌ Invalid Access Code. Please try again or contact the developer.";
+                } else {
+                    // Other server errors
+                    errorMessage.textContent = "⚠️ Server error during verification. Please try again.";
+                }
+
+            } catch (e) {
+                console.error("Network Error during code verification:", e);
+                errorMessage.textContent = "🔌 Network error occurred. Could not verify access code.";
+            } finally {
+                verifyButton.disabled = false;
+                verifyButton.textContent = 'Verify Code';
+                inputField.disabled = false;
+            }
+        }
+        
+        // Ensure the verification runs when Enter is pressed in the input field
+        document.addEventListener('DOMContentLoaded', () => {
+            const input = document.getElementById('accessCodeInput');
+            if (input) {
+                input.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault(); // Prevent default form submission if applicable
+                        verifyAccessCode();
+                    }
+                });
+            }
+        });
     </script>
     <style>
         body { font-family: 'Inter', sans-serif; }
+        /* Modal Backdrop Fade In */
+        .modal-fade-in {
+            transition: opacity 0.3s ease-in-out;
+        }
     </style>
 </head>
 <body class="bg-neutral-gray min-h-screen flex items-center justify-center p-4">
@@ -36,7 +134,6 @@
             <h1 class="text-4xl font-extrabold text-gray-900 mb-2">
                 <span class="text-primary-blue">AI Address</span> Verification
             </h1>
-            <!-- UPDATED: Replaced 'Gemini' with 'advanced AI' -->
             <p class="text-lg text-gray-500 mt-2">Choose a method to clean, normalize, and verify addresses using advanced AI.</p>
         </header>
         
@@ -46,7 +143,7 @@
                 <span class="mr-2">📝</span> Verify Single Address
             </a>
             
-            <a href="bulk.html" class="block w-full text-center py-4 px-6 bg-accent-yellow text-gray-900 font-bold text-xl rounded-lg shadow-md transition duration-300 transform hover:scale-[1.02] hover:bg-yellow-500 focus:outline-none focus:ring-4 focus:ring-accent-yellow focus:ring-opacity-50">
+            <a href="#" onclick="showAccessModal(event)" class="block w-full text-center py-4 px-6 bg-accent-yellow text-gray-900 font-bold text-xl rounded-lg shadow-md transition duration-300 transform hover:scale-[1.02] hover:bg-yellow-500 focus:outline-none focus:ring-4 focus:ring-accent-yellow focus:ring-opacity-50">
                 <span class="mr-2">📦</span> Bulk Address Verification
             </a>
         </div>
@@ -55,5 +152,55 @@
             The bulk verification process is handled directly in your browser to maintain **data privacy** and speed.
         </p>
     </div>
-</body>
+
+    <div id="accessModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 z-50 flex items-center justify-center modal-fade-in">
+        <div class="bg-white rounded-xl p-6 sm:p-8 w-full max-w-sm mx-4 shadow-2xl transform transition-all scale-100">
+            
+            <div class="text-center mb-6">
+                <svg class="w-10 h-10 text-primary-blue mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                <h3 class="text-xl font-bold text-gray-900">Bulk Access Required</h3>
+                <p class="text-sm text-gray-500 mt-1">Please enter the valid access code to proceed with bulk address verification.</p>
+            </div>
+
+            <div class="space-y-4">
+                <input 
+                    type="password" 
+                    id="accessCodeInput" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue text-lg" 
+                    placeholder="Enter Access Code"
+                >
+                
+                <p id="modalErrorMessage" class="text-danger-red text-sm font-medium text-center h-5"></p>
+
+                <button 
+                    id="modalVerifyButton"
+                    onclick="verifyAccessCode()" 
+                    class="w-full py-3 px-4 bg-primary-blue text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition duration-150 focus:outline-none focus:ring-4 focus:ring-primary-blue focus:ring-opacity-50"
+                >
+                    Verify Code
+                </button>
+            </div>
+
+            <div class="mt-6 text-center border-t pt-4">
+                <p class="text-xs text-gray-500 mb-2">Need an access code or assistance?</p>
+                <a 
+                    href="https://wa.me/9193246219" 
+                    target="_blank" 
+                    class="inline-flex items-center text-sm font-bold text-whatsapp-green hover:text-green-600 transition duration-150"
+                >
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12.036 1c-6.077 0-11 4.923-11 11 0 1.996.536 3.844 1.458 5.467L1 23l5.584-1.479C8.75 22.427 10.378 23 12.036 23c6.077 0 11-4.923 11-11s-4.923-11-11-11zm5.556 14.532c-.087.237-.478.718-.67.854-.19.135-.38.204-.567.204-.188 0-.368-.068-.558-.204-.19-.136-.735-.436-.884-.654-.148-.219-.174-.383-.087-.533.088-.15.385-.297.518-.475.133-.178.178-.303.178-.428 0-.125-.094-.28-.15-.405-.058-.125-.494-.972-.678-1.328-.184-.356-.37-.307-.558-.307-.188 0-.387-.07-.567-.07-.18 0-.47.068-.658.307-.188.238-.718.706-.877.842-.158.136-.346.204-.533.204-.188 0-.376-.068-.567-.204-.19-.136-.57-.474-.816-.763-.247-.289-.523-.626-.816-1.02-.293-.393-.586-.787-.804-1.125-.219-.338-.44-.65-.67-.853-.23-.204-.515-.246-.628-.246-.113 0-.246-.015-.38-.015-.135 0-.256.03-.38.03-.125 0-.306.068-.466.204-.16.136-.615.68-.615 1.638 0 .958.636 1.884.71 1.968.074.084 1.144 1.933 2.768 2.585 1.624.652 2.77 1.055 3.107 1.258.337.203.57.306.777.306.206 0 .394-.07.582-.204.188-.135.804-.52 1.022-.763.218-.243.37-.406.56-.57.19-.163.38-.306.568-.306z"/></svg>
+                    Contact Developer on WhatsApp
+                </a>
+            </div>
+
+            <button 
+                onclick="hideAccessModal()" 
+                class="absolute top-3 right-3 text-gray-400 hover:text-gray-600 focus:outline-none"
+                aria-label="Close"
+            >
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+    </div>
+    </body>
 </html>
