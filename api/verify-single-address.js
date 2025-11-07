@@ -165,10 +165,10 @@ module.exports = async (req, res) => {
     // END OF CORS FIX
 
     try {
-        const { address, customerName, accessCode } = req.body; // Destructure new accessCode
+        const { address, customerName, accessCode, quickCheck } = req.body; // Destructure new accessCode AND quickCheck
         let remarks = []; // Initialize remarks array
         
-        // --- ⭐ NEW SECURITY CHECK FOR BULK REQUESTS ⭐ ---
+        // --- ⭐ CRITICAL: SECURITY CHECK FOR ANY REQUEST WITH accessCode ⭐ ---
         if (accessCode) {
             // Check if environment variable is set AND if the code matches
             if (!BULK_ACCESS_CODE || accessCode !== BULK_ACCESS_CODE) {
@@ -180,10 +180,15 @@ module.exports = async (req, res) => {
                     remarks: "Security check failed."
                 });
             }
+            
+            // ⭐ NEW: If this is ONLY a quick check (from index.html), return success now. ⭐
+            if (quickCheck === true) {
+                return res.status(200).json({ status: "Success", message: "Access code verified." });
+            }
         }
-        // --- END NEW SECURITY CHECK ---
+        // --- END SECURITY CHECK ---
 
-        // --- YOUR ORIGINAL LOGIC STARTS HERE ---
+        // --- STANDARD SINGLE/BULK ADDRESS LOGIC STARTS HERE ---
         if (!address) {
             return res.status(400).json({ status: "Error", error: "Address is required." });
         }
