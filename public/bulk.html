@@ -5,19 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bulk Address Verification</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="script.js"></script>
+    <script src="script.js"></script> 
     <script>
-        // Set the API endpoint for verification
-        const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
-
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
                         'primary-blue': '#1D4ED8', // Dark Blue
-                        'secondary-green': '#059669', // Dark Green (Success)
+                        'secondary-green': '#059669', // Dark Green
                         'neutral-gray': '#E5E7EB',
-                        'accent-yellow': '#FCD34D', // For contrast/highlight
+                        'accent-yellow': '#FCD34D', 
                         'danger-red': '#DC2626',
                     },
                     fontFamily: {
@@ -26,33 +23,7 @@
                 }
             }
         }
-    
-        /**
-         * UPDATED: Displays a color-coded status message.
-         * @param {string} message - The status text.
-         * @param {boolean} isError - If true, use error styling.
-         */
-        function updateStatusMessage(message, isError = false) {
-            const statusDiv = document.getElementById('statusMessage');
-            statusDiv.textContent = message;
-            
-            // Reset classes
-            statusDiv.className = 'p-4 rounded-lg font-semibold text-center mt-6 transition-colors duration-200';
-
-            if (isError) {
-                statusDiv.classList.add('bg-red-100', 'text-danger-red', 'border', 'border-red-300');
-            } else if (message.includes('complete')) {
-                // Success/Complete
-                statusDiv.classList.add('bg-secondary-green', 'text-white', 'shadow-lg');
-            } else if (message.includes('Processing')) {
-                // In Progress
-                statusDiv.classList.add('bg-primary-blue', 'text-white');
-            } else {
-                // Initial State or Info
-                statusDiv.classList.add('bg-neutral-gray', 'text-gray-700');
-            }
-        }
-
+        
         /**
          * Clears the file input, disables the process button, and resets the status.
          */
@@ -60,191 +31,25 @@
             document.getElementById('csvFileInput').value = '';
             document.getElementById('processButton').disabled = true;
             document.getElementById('progressBarFill').style.width = '0%';
-            document.getElementById('progressBarContainer').classList.add('hidden');
             document.getElementById('downloadLink').classList.add('hidden');
             updateStatusMessage('Ready to start. Please follow Step 1 and 2.', false);
         }
-
-        /**
-         * Handles the template download action.
-         */
-        function handleTemplateDownload() {
-            const templateRows = [
-                // Header Row (Must match the expected API keys for simplicity)
-                "customerName,rawAddress", 
-                // Example Data (for user convenience)
-                "John Doe,123 Main St, Near City Hall, Example District, 110001",
-                "Jane Smith,Shop No 45, Opposite XYZ Mall, Mumbai, 400001"
-            ];
-            createAndDownloadCSV(templateRows, "address_verification_template.csv");
-        }
-
-        /**
-         * Escape quotes and wrap values for CSV
-         */
-        function escapeAndQuote(value) {
-            if (value === null || value === undefined) return '""';
-            const str = String(value);
-            return `"${str.replace(/"/g, '""')}"`;
-        }
-
-        /**
-         * Main function to handle the bulk verification process.
-         */
-        async function handleBulkVerification() {
-            const fileInput = document.getElementById('csvFileInput');
-            const processButton = document.getElementById('processButton');
-            const progressBarContainer = document.getElementById('progressBarContainer');
-            const progressBarFill = document.getElementById('progressBarFill');
-            const accessCode = sessionStorage.getItem('bulkAccessCode');
-
-            if (!fileInput.files.length) {
-                updateStatusMessage('⚠️ Please select a CSV file first.', true);
-                return;
-            }
-            if (!accessCode) {
-                updateStatusMessage('❌ Missing access code. Please return to the home page.', true);
-                return;
-            }
-
-            const file = fileInput.files[0];
-            processButton.disabled = true;
-            fileInput.disabled = true;
-            progressBarContainer.classList.remove('hidden');
-            progressBarFill.style.width = '0%';
-            updateStatusMessage('Reading file...', false);
-
-            const reader = new FileReader();
-
-            reader.onload = async function(e) {
-                const csvText = e.target.result;
-                const rows = csvText.split('\n').filter(row => row.trim() !== '');
-                
-                // Assuming the first row is the header
-                const header = rows[0].split(',');
-                const addressRows = rows.slice(1);
-                
-                const totalAddresses = addressRows.length;
-                if (totalAddresses === 0) {
-                    updateStatusMessage('The CSV file is empty or has only a header.', true);
-                    processButton.disabled = false;
-                    fileInput.disabled = false;
-                    progressBarContainer.classList.add('hidden');
-                    return;
-                }
-
-                // New header for the output CSV, including all verified fields
-                const outputHeader = [
-                    ...header, 
-                    "addressLine1", "landmark", "state", "district", "pin", "remarks", "addressQuality"
-                ].map(escapeAndQuote).join(',');
-                let outputRows = [outputHeader];
-                let processedCount = 0;
-
-                for (let i = 0; i < totalAddresses; i++) {
-                    const row = addressRows[i];
-                    const values = row.split(',').map(v => v.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
-                    
-                    // Simple logic to map the required fields based on the template
-                    const nameIndex = header.indexOf('customerName');
-                    const addressIndex = header.indexOf('rawAddress');
-
-                    const customerName = nameIndex !== -1 ? values[nameIndex] : '';
-                    const rawAddress = addressIndex !== -1 ? values[addressIndex] : '';
-
-                    if (!rawAddress) {
-                        // Skip if address is empty
-                        processedCount++;
-                        const progress = (processedCount / totalAddresses) * 100;
-                        progressBarFill.style.width = `${progress}%`;
-                        updateStatusMessage(`Processing... ${processedCount} of ${totalAddresses} addresses completed.`);
-                        continue;
-                    }
-
-                    // --- API CALL ---
-                    const verificationResult = await fetchVerification(rawAddress, customerName, accessCode);
-                    
-                    // Construct the output row
-                    const originalValues = values.map(escapeAndQuote).join(','); // The original values quoted
-
-                    const outputRow = originalValues + ',' + [
-                        verificationResult.addressLine1,
-                        verificationResult.landmark,
-                        verificationResult.state,
-                        verificationResult.district,
-                        verificationResult.pin,
-                        verificationResult.remarks,
-                        verificationResult.addressQuality
-                    ].map(escapeAndQuote).join(',');
-
-                    outputRows.push(outputRow);
-                    
-                    processedCount++;
-                    const progress = (processedCount / totalAddresses) * 100;
-                    progressBarFill.style.width = `${progress}%`;
-                    
-                    updateStatusMessage(`Processing... ${processedCount} of ${totalAddresses} addresses completed.`);
-                }
-
-                updateStatusMessage(`Processing complete! ${totalAddresses} addresses verified. Click 'Download Verified CSV'.`, false);
-                
-                // Show the final download button
-                document.getElementById('downloadLink').classList.remove('hidden');
-                document.getElementById('downloadVerifiedButton').onclick = () => {
-                    createAndDownloadCSV(outputRows, "verified_addresses.csv");
-                };
-
-                processButton.disabled = false;
-                fileInput.disabled = false;
-            };
-
-            reader.onerror = function() {
-                updateStatusMessage("Error reading file.", true);
-                processButton.disabled = false;
-                fileInput.disabled = false;
-            };
-
-            reader.readAsText(file);
-        }
         
-        /**
-         * Helper function to abstract the fetch logic and handle errors/access code checks.
-         */
-        async function fetchVerification(address, name, accessCode) {
-            try {
-                const response = await fetch(API_ENDPOINT, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        address: address, 
-                        customerName: name,
-                        accessCode: accessCode // Send the code for bulk validation
-                    })
-                });
-
-                const result = await response.json();
-
-                if (response.status === 401) {
-                    throw new Error("401: Invalid Access Code. Stopping bulk process.");
-                }
-                if (response.status !== 200) {
-                    throw new Error(result.error || `Server Error: ${response.status}`);
-                }
-                return result; // Return the verified data
-
-            } catch (e) {
-                // For a failed individual address, return a consistent error object for the CSV.
-                return {
-                    addressLine1: 'API_FAILED',
-                    landmark: '',
-                    state: '',
-                    district: '',
-                    pin: '',
-                    remarks: e.message || 'Verification failed unexpectedly.',
-                    addressQuality: 'BAD'
-                };
-            }
-        }
+        document.addEventListener('DOMContentLoaded', () => {
+             // Initial check to see if an access code exists
+             const accessCode = sessionStorage.getItem('bulkAccessCode');
+             if (!accessCode) {
+                updateStatusMessage("🔒 Access Code not found. Please go back to Home to get access.", true);
+                // Disable everything if no code is present
+                document.getElementById('csvFileInput').disabled = true;
+                document.getElementById('processButton').disabled = true;
+             } else {
+                updateStatusMessage("Access Granted. Ready to proceed with verification.", false);
+                // Enable file input if access is granted
+                document.getElementById('csvFileInput').disabled = false;
+             }
+        });
+        
     </script>
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -270,10 +75,9 @@
                 <div class="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-primary-blue text-white rounded-full font-bold mr-4">1</div>
                 <div>
                     <h3 class="text-lg font-bold text-gray-800 mb-2">Download Template</h3>
-                    <p class="text-sm text-gray-600 mb-4">Use our standard CSV template to prepare your data for a smooth verification process.</p>
+                    <p class="text-sm text-gray-600 mb-4">Use our standard CSV template which must contain **ORDER ID**, **CUSTOMER NAME**, and **CUSTOMER RAW ADDRESS**.</p>
                     <button 
                         id="downloadTemplateButton" 
-                        onclick="handleTemplateDownload()" 
                         class="px-5 py-2 text-white bg-primary-blue font-semibold rounded-lg shadow-md hover:bg-blue-700 transition duration-150 inline-flex items-center">
                         <svg class="w-4 h-4 mr-2 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                         Download Template
@@ -289,13 +93,12 @@
 
                 <div class="mb-4">
                     <label for="csvFileInput" class="block text-sm font-medium text-gray-700 mb-2">Select CSV File</label>
-                    <input type="file" id="csvFileInput" accept=".csv" class="w-full text-gray-700 bg-white border border-gray-300 rounded-lg p-2 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-blue file:text-white hover:file:bg-blue-700 cursor-pointer transition duration-150">
+                    <input type="file" id="csvFileInput" accept=".csv" class="w-full text-gray-700 bg-white border border-gray-300 rounded-lg p-2 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary-blue file:text-white hover:file:bg-blue-700 cursor-pointer transition duration-150" disabled>
                 </div>
 
                 <div class="text-center mt-6">
                     <button 
                         id="processButton" 
-                        onclick="handleBulkVerification()" 
                         disabled 
                         class="w-full sm:w-auto px-10 py-3 bg-accent-yellow text-gray-900 font-bold text-lg rounded-lg shadow-xl transition duration-300 transform hover:scale-[1.02] hover:bg-yellow-500 focus:outline-none focus:ring-4 focus:ring-accent-yellow focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed">
                         <span class="mr-2">🚀</span> Start Verification
@@ -303,7 +106,7 @@
                 </div>
             </div>
             
-            <div id="progressBarContainer" class="hidden mt-6">
+            <div id="progressBarContainer" class="mt-6">
                 <div class="w-full bg-gray-200 rounded-full h-3">
                     <div id="progressBarFill" class="bg-primary-blue h-3 rounded-full transition-all duration-300 ease-out" style="width: 0%;"></div>
                 </div>
