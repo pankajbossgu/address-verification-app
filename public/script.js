@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (processButton) {
+        // No change here - just calling the bulk handler
         processButton.addEventListener('click', handleBulkVerification);
     }
 });
@@ -39,6 +40,7 @@ async function fetchVerification(address, name, accessCode = null) {
         const bodyData = { address: address, customerName: name }; 
         if (accessCode) { 
             bodyData.accessCode = accessCode; // This adds the code to the request body
+            // IMPORTANT: For bulk processing, we DO NOT include quickCheck: true
         }
 
         const response = await fetch(API_ENDPOINT, {
@@ -51,7 +53,7 @@ async function fetchVerification(address, name, accessCode = null) {
         if (response.status === 401) {
              return { 
                 status: "Error", 
-                error: "Unauthorized Access. Please check the bulk access code.", 
+                error: "Unauthorized Access. The previously verified code is no longer valid or session expired.", 
                 addressQuality: "VERY BAD" 
             };
         }
@@ -91,6 +93,7 @@ async function handleSingleVerification() {
     resultsContainer.style.display = 'none';
 
     try {
+        // Note: fetchVerification is called without the accessCode here
         const result = await fetchVerification(rawAddress, customerName); 
 
         if (result.status === "Success") {
@@ -127,9 +130,10 @@ async function handleBulkVerification() {
     }
 
     // ⭐ CRITICAL: RETRIEVE ACCESS CODE FROM SESSION STORAGE ⭐
+    // The code should already be verified on the index.html page
     const accessCode = sessionStorage.getItem('bulkAccessCode');
     if (!accessCode) {
-        alert("Bulk verification cancelled. Please return to the home page and re-enter the access code.");
+        alert("Bulk verification cancelled. Please return to the home page and enter the access code first.");
         return;
     }
     // --------------------------------------------------------
@@ -181,7 +185,7 @@ async function handleBulkVerification() {
             if (rawAddress.trim() === "") {
                  verificationResult = { status: "Skipped", customerCleanName: customerName, remarks: "Skipped: Address is empty.", addressQuality: "BAD" };
             } else {
-                // ⭐ CRITICAL: PASS accessCode FROM SESSION STORAGE HERE ⭐
+                // ⭐ CRITICAL: PASS accessCode from sessionStorage HERE ⭐
                 verificationResult = await fetchVerification(rawAddress, customerName, accessCode);
             }
 
@@ -191,6 +195,8 @@ async function handleBulkVerification() {
                  progressBarFill.style.width = '100%';
                  processButton.disabled = false;
                  fileInput.disabled = false;
+                 // Clear the bad code from session storage
+                 sessionStorage.removeItem('bulkAccessCode'); 
                  return; // Stop processing immediately on security error
             }
 
