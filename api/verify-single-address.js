@@ -160,34 +160,8 @@ module.exports = async (req, res) => {
     }
     // END OF CORS FIX
 
-    // NEW: Retrieve the access code from Vercel Environment Variables
-    const BULK_ACCESS_CODE = process.env.BULK_ACCESS_CODE; 
-
     try {
-        // MODIFIED: Destructure the new 'accessCode' from the request body
-        const { address, customerName, accessCode } = req.body; 
-
-        // --- NEW SECURITY CHECK FOR BULK REQUESTS (Only triggered if accessCode is provided) ---
-        if (accessCode) {
-            if (!BULK_ACCESS_CODE || accessCode !== BULK_ACCESS_CODE) {
-                console.warn("Unauthorized access attempt for bulk processing.");
-                // Return 401 Unauthorized error with necessary fields for the frontend error handling
-                return res.status(401).json({ 
-                    status: "Error", 
-                    error: "Unauthorized Access: Invalid or missing access code for bulk verification.", 
-                    remarks: "Security violation detected. Please ensure your access code is correct.",
-                    // Provide defaults for frontend to avoid crashes
-                    addressLine1: "ACCESS CODE ERROR",
-                    addressQuality: "VERY BAD",
-                    pin: null,
-                    state: null,
-                    district: null,
-                    customerCleanName: customerName || ''
-                });
-            }
-        }
-        // --- END NEW SECURITY CHECK ---
-
+        const { address, customerName } = req.body;
         let remarks = []; // Initialize remarks array
         
         if (!address) {
