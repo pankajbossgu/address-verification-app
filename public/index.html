@@ -31,10 +31,9 @@
         
         /**
          * Function to show the custom access code modal.
-         * CRITICAL FIX: Removed document.body.classList.add('backdrop-blur-sm');
-         * The blur is now correctly applied to the modal's backdrop.
          */
         function showAccessModal(event) {
+            // Prevent the default link action (which would navigate immediately)
             event.preventDefault(); 
             document.getElementById('accessModal').classList.remove('hidden');
         }
@@ -44,6 +43,7 @@
          */
         function hideAccessModal() {
             document.getElementById('accessModal').classList.add('hidden');
+            // Clear inputs and messages on close
             document.getElementById('accessCodeInput').value = '';
             document.getElementById('modalErrorMessage').textContent = '';
         }
@@ -57,7 +57,7 @@
             const verifyButton = document.getElementById('modalVerifyButton');
             
             const accessCode = inputField.value.trim();
-            errorMessage.textContent = ''; 
+            errorMessage.textContent = ''; // Clear previous errors
             
             if (accessCode === '') {
                 errorMessage.textContent = "Please enter the access code.";
@@ -69,23 +69,29 @@
             inputField.disabled = true;
 
             try {
-                // IMPORTANT: quickCheck: true tells the API to only validate the code
+                // 1. Send the code to the Vercel API for verification (quickCheck: true)
                 const response = await fetch(API_ENDPOINT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         accessCode: accessCode,
+                        // Signal the backend to ONLY check the code
                         quickCheck: true 
                     })
                 });
 
+                // 2. Check the response status
                 if (response.status === 200) {
+                    // Success! Code is correct.
                     sessionStorage.setItem('bulkAccessCode', accessCode);
                     hideAccessModal();
+                    // Redirect the user
                     window.location.href = "bulk.html";
                 } else if (response.status === 401) {
+                    // Unauthorized - Code is wrong
                     errorMessage.textContent = "❌ Invalid Access Code. Please try again or contact the developer.";
                 } else {
+                    // Other server errors
                     errorMessage.textContent = "⚠️ Server error during verification. Please try again.";
                 }
 
@@ -99,18 +105,26 @@
             }
         }
         
+        // Ensure the verification runs when Enter is pressed in the input field
         document.addEventListener('DOMContentLoaded', () => {
             const input = document.getElementById('accessCodeInput');
             if (input) {
                 input.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
-                        e.preventDefault(); 
+                        e.preventDefault(); // Prevent default form submission if applicable
                         verifyAccessCode();
                     }
                 });
             }
         });
     </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Modal Backdrop Fade In */
+        .modal-fade-in {
+            transition: opacity 0.3s ease-in-out;
+        }
+    </style>
 </head>
 <body class="bg-neutral-gray min-h-screen flex items-center justify-center p-4">
     
@@ -120,53 +134,73 @@
             <h1 class="text-4xl font-extrabold text-gray-900 mb-2">
                 <span class="text-primary-blue">AI Address</span> Verification
             </h1>
-            <div class="inline-flex items-center justify-center text-primary-blue mb-4">
-                <svg class="w-8 h-8 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.242a2.25 2.25 0 010 3.182l-5.747 5.747a1.5 1.5 0 01-2.122 0L5.207 9.879a1.5 1.5 0 010-2.122l5.747-5.747a2.25 2.25 0 013.182 0zM12 18h.01"></path></svg>
-            </div>
             <p class="text-lg text-gray-500 mt-2">Choose a method to clean, normalize, and verify addresses using advanced AI.</p>
         </header>
         
         <div class="options-container space-y-6 mt-8">
             
-            <a href="single.html" class="block w-full text-center py-4 px-6 bg-secondary-green text-white font-bold text-xl rounded-lg shadow-xl transition duration-300 transform hover:scale-[1.02] hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-secondary-green focus:ring-opacity-50">
-                <span class="mr-2">📍</span> Verify Single Address
+            <a href="single.html" class="block w-full text-center py-4 px-6 bg-secondary-green text-white font-bold text-xl rounded-lg shadow-md transition duration-300 transform hover:scale-[1.02] hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-secondary-green focus:ring-opacity-50">
+                <span class="mr-2">📝</span> Verify Single Address
             </a>
             
-            <a href="#" onclick="showAccessModal(event)" class="block w-full text-center py-4 px-6 bg-accent-yellow text-gray-900 font-bold text-xl rounded-lg shadow-xl transition duration-300 transform hover:scale-[1.02] hover:bg-yellow-500 focus:outline-none focus:ring-4 focus:ring-accent-yellow focus:ring-opacity-50">
-                <span class="mr-2">📊</span> Bulk Address Verification
+            <a href="#" onclick="showAccessModal(event)" class="block w-full text-center py-4 px-6 bg-accent-yellow text-gray-900 font-bold text-xl rounded-lg shadow-md transition duration-300 transform hover:scale-[1.02] hover:bg-yellow-500 focus:outline-none focus:ring-4 focus:ring-accent-yellow focus:ring-opacity-50">
+                <span class="mr-2">📦</span> Bulk Address Verification
             </a>
-            
-            <p class="text-sm text-center text-gray-500 pt-2">Bulk verification requires a developer-provided access code.</p>
         </div>
-
+        
+        <p class="text-center mt-8 text-sm text-gray-500 border-t pt-4">
+            The bulk verification process is handled directly in your browser to maintain **data privacy** and speed.
+        </p>
     </div>
-    
-    <div id="accessModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-70 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity">
-        <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-sm m-4 transform scale-100 transition-transform duration-300">
-            <h2 class="text-2xl font-bold text-primary-blue mb-4">Bulk Access Required</h2>
-            <p class="text-gray-600 mb-6 text-sm">Please enter the access code provided by the developer to proceed with bulk verification.</p>
-            
-            <input type="text" id="accessCodeInput" placeholder="Enter Access Code" class="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-primary-blue focus:border-primary-blue" maxlength="15">
-            
-            <p id="modalErrorMessage" class="text-danger-red text-sm mb-4 font-medium h-4"></p>
 
-            <div class="flex space-x-3">
-                <button id="modalVerifyButton" onclick="verifyAccessCode()" class="flex-1 py-3 bg-primary-blue text-white font-bold rounded-lg hover:bg-blue-700 transition duration-150">
+    <div id="accessModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 z-50 flex items-center justify-center modal-fade-in">
+        <div class="bg-white rounded-xl p-6 sm:p-8 w-full max-w-sm mx-4 shadow-2xl transform transition-all scale-100">
+            
+            <div class="text-center mb-6">
+                <svg class="w-10 h-10 text-primary-blue mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                <h3 class="text-xl font-bold text-gray-900">Bulk Access Required</h3>
+                <p class="text-sm text-gray-500 mt-1">Please enter the valid access code to proceed with bulk address verification.</p>
+            </div>
+
+            <div class="space-y-4">
+                <input 
+                    type="password" 
+                    id="accessCodeInput" 
+                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue text-lg" 
+                    placeholder="Enter Access Code"
+                >
+                
+                <p id="modalErrorMessage" class="text-danger-red text-sm font-medium text-center h-5"></p>
+
+                <button 
+                    id="modalVerifyButton"
+                    onclick="verifyAccessCode()" 
+                    class="w-full py-3 px-4 bg-primary-blue text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition duration-150 focus:outline-none focus:ring-4 focus:ring-primary-blue focus:ring-opacity-50"
+                >
                     Verify Code
                 </button>
-                <button onclick="hideAccessModal()" class="flex-1 py-3 bg-gray-200 text-gray-800 font-bold rounded-lg hover:bg-gray-300 transition duration-150">
-                    Cancel
-                </button>
             </div>
-            
-            <div class="text-center mt-6">
-                <a href="https://wa.me/xxxxxxxxxx" target="_blank" class="text-xs text-whatsapp-green font-semibold hover:underline inline-flex items-center">
+
+            <div class="mt-6 text-center border-t pt-4">
+                <p class="text-xs text-gray-500 mb-2">Need an access code or assistance?</p>
+                <a 
+                    href="https://wa.me/9193246219" 
+                    target="_blank" 
+                    class="inline-flex items-center text-sm font-bold text-whatsapp-green hover:text-green-600 transition duration-150"
+                >
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12.036 1c-6.077 0-11 4.923-11 11 0 1.996.536 3.844 1.458 5.467L1 23l5.584-1.479C8.75 22.427 10.378 23 12.036 23c6.077 0 11-4.923 11-11s-4.923-11-11-11zm5.556 14.532c-.087.237-.478.718-.67.854-.19.135-.38.204-.567.204-.188 0-.368-.068-.558-.204-.19-.136-.735-.436-.884-.654-.148-.219-.174-.383-.087-.533.088-.15.385-.297.518-.475.133-.178.178-.303.178-.428 0-.125-.094-.28-.15-.405-.058-.125-.494-.972-.678-1.328-.184-.356-.37-.307-.558-.307-.188 0-.387-.07-.567-.07-.18 0-.47.068-.658.307-.188.238-.718.706-.877.842-.158.136-.346.204-.533.204-.188 0-.376-.068-.567-.204-.19-.136-.57-.474-.816-.763-.247-.289-.523-.626-.816-1.02-.293-.393-.586-.787-.804-1.125-.219-.338-.44-.65-.67-.853-.23-.204-.515-.246-.628-.246-.113 0-.246-.015-.38-.015-.135 0-.256.03-.38.03-.125 0-.306.068-.466.204-.16.136-.615.68-.615 1.638 0 .958.636 1.884.71 1.968.074.084 1.144 1.933 2.768 2.585 1.624.652 2.77 1.055 3.107 1.258.337.203.57.306.777.306.206 0 .394-.07.582-.204.188-.135.804-.52 1.022-.763.218-.243.37-.406.56-.57.19-.163.38-.306.568-.306z"/></svg>
                     Contact Developer on WhatsApp
-                    <svg class="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12.04 2c-5.55 0-10 4.49-10 10 0 1.93.55 3.75 1.54 5.34l-1.07 3.91 4.02-1.05c1.55.84 3.32 1.3 5.51 1.3 5.54 0 10-4.49 10-10s-4.49-10-10-10zm-1.88 15.68h-1.57c-.24 0-.44-.06-.6-.17-.16-.11-.25-.26-.25-.45v-1.74c0-.24.09-.43.27-.56.17-.14.37-.2.6-.2h1.57c.24 0 .44.06.6.17.16.11.25.26.25.45v1.74c0 .24-.09.43-.27.56-.17.14-.37.2-.6.2zm.89-6.38c-.37-.08-.75-.12-1.12-.12-1.46 0-2.45.36-2.97 1.09-.52.73-.78 1.9-.78 3.52v.03c0 .24.08.43.24.57.17.14.37.2.6.2h1.72c.24 0 .44-.06.6-.17.16-.11.25-.26.25-.45v-.03c0-.98.24-1.66.72-2.03.48-.38 1.15-.56 2.01-.56.44 0 .85.05 1.25.16.4.11.75.25 1.05.43.3.18.55.4.74.67.19.27.34.6.46.99.12.39.18.84.18 1.35v.03c0 .24.08.43.24.57.17.14.37.2.6.2h1.72c.24 0 .44-.06.6-.17.16-.11.25-.26.25-.45v-.03c0-1.8-.46-3.23-1.39-4.28-.93-1.05-2.22-1.57-3.87-1.57-.45 0-.89.05-1.33.15-.44.1-.85.26-1.23.46-.38.2-.72.46-1.02.78-.3.32-.54.7-.72 1.14-.18.44-.27.94-.27 1.51v.03z"/></svg>
                 </a>
             </div>
 
+            <button 
+                onclick="hideAccessModal()" 
+                class="absolute top-3 right-3 text-gray-400 hover:text-gray-600 focus:outline-none"
+                aria-label="Close"
+            >
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
         </div>
     </div>
-</body>
+    </body>
 </html>
