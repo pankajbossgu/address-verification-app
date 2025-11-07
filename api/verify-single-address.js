@@ -5,10 +5,6 @@
 const INDIA_POST_API = 'https://api.postalpincode.in/pincode/';
 let pincodeCache = {}; 
 
-// ⭐ CRITICAL: ACCESS CODE CONFIGURATION ⭐
-const BULK_ACCESS_CODE = process.env.BULK_ACCESS_CODE; 
-// -------------------------------------
-
 const testingKeywords = ['test', 'testing', 'asdf', 'qwer', 'zxcv', 'random', 'gjnj', 'fgjnj']; 
 const coreMeaningfulWords = [
     "ddadu", "ddadu", "ai", "add", "add-", "raw", "dumping", "grand", "dumping grand",
@@ -65,7 +61,7 @@ async function getGeminiResponse(prompt) {
         return { text: null, error: "Gemini API key not set in Vercel environment variables." };
     }
 
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`; // Use Gemini 2.5 Flash
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
     const requestBody = {
         contents: [{ parts: [{ text: prompt }] }],
@@ -165,30 +161,9 @@ module.exports = async (req, res) => {
     // END OF CORS FIX
 
     try {
-        const { address, customerName, accessCode, quickCheck } = req.body; // Destructure new accessCode AND quickCheck
+        const { address, customerName } = req.body;
         let remarks = []; // Initialize remarks array
         
-        // --- ⭐ CRITICAL: SECURITY CHECK FOR ANY REQUEST WITH accessCode ⭐ ---
-        if (accessCode) {
-            // Check if environment variable is set AND if the code matches
-            if (!BULK_ACCESS_CODE || accessCode !== BULK_ACCESS_CODE) {
-                // Return a 401 response for unauthorized access
-                return res.status(401).json({ 
-                    status: "Error", 
-                    error: "Unauthorized Access. Invalid bulk access code.", 
-                    addressQuality: "VERY BAD",
-                    remarks: "Security check failed."
-                });
-            }
-            
-            // ⭐ NEW: If this is ONLY a quick check (from index.html), return success now. ⭐
-            if (quickCheck === true) {
-                return res.status(200).json({ status: "Success", message: "Access code verified." });
-            }
-        }
-        // --- END SECURITY CHECK ---
-
-        // --- STANDARD SINGLE/BULK ADDRESS LOGIC STARTS HERE ---
         if (!address) {
             return res.status(400).json({ status: "Error", error: "Address is required." });
         }
@@ -197,34 +172,17 @@ module.exports = async (req, res) => {
         const initialPin = extractPin(address);
         let postalData = { PinStatus: 'Error' };
         
-        // 1. Check for Test Address
-        if (testingKeywords.some(keyword => address.toLowerCase().includes(keyword))) {
-            // Return test result if keywords are found
-            return res.status(200).json({
-                status: "Success",
-                customerRawName: customerName,
-                customerCleanName: customerName,
-                addressLine1: `TEST ADDRESS: ${address}`,
-                landmark: 'Near Test Marker',
-                state: 'Test State',
-                district: 'Test District',
-                pin: '123456',
-                remarks: 'Test mode activated. No API/AI calls made.',
-                addressQuality: 'EXCELLENT',
-            });
-        }
-        
         if (initialPin) {
             postalData = await getIndiaPostData(initialPin);
         }
 
-        // 2. Call Gemini API
+        // 1. Call Gemini API
         const geminiResult = await processAddress(address, postalData);
         if (geminiResult.error || !geminiResult.text) {
             return res.status(500).json({ status: "Error", error: geminiResult.error || "Gemini API failed to return text." });
         }
 
-        // 3. Parse Gemini JSON output
+        // 2. Parse Gemini JSON output
         let parsedData;
         try {
             // Attempt to clean up and parse the JSON string
@@ -246,7 +204,7 @@ module.exports = async (req, res) => {
             };
         }
 
-        // 4. --- PIN VERIFICATION & CORRECTION LOGIC ---
+        // 3. --- PIN VERIFICATION & CORRECTION LOGIC ---
         let finalPin = String(parsedData.PIN).match(/\b\d{6}\b/) ? parsedData.PIN : initialPin;
         let primaryPostOffice = postalData.PostOfficeList ? postalData.PostOfficeList[0] : {};
 
@@ -280,13 +238,13 @@ module.exports = async (req, res) => {
             finalPin = initialPin || null; // Fallback to initialPin even if invalid, for user reference
         }
         
-        // 4.5. --- Short Address Check ---
+        // 3.5. --- Short Address Check ---
         if (parsedData.FormattedAddress && parsedData.FormattedAddress.length < 35 && parsedData.AddressQuality !== 'Very Good' && parsedData.AddressQuality !== 'Good') {
              remarks.push(`CRITICAL_ALERT: Formatted address is short (${parsedData.FormattedAddress.length} chars). Manual verification recommended.`);
         }
 
 
-        // 5. --- Directional Prefix Logic for Landmark ---
+        // 4. --- Directional Prefix Logic for Landmark ---
         let landmarkValue = parsedData.Landmark || '';
         const originalAddressLower = address.toLowerCase();
         let finalLandmark = '';
@@ -317,7 +275,7 @@ module.exports = async (req, res) => {
         }
 
 
-        // 6. Construct the Final JSON Response
+        // 5. Construct the Final JSON Response
         const finalResponse = {
             status: "Success",
             customerRawName: customerName,
