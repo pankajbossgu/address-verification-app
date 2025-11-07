@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadTemplateButton = document.getElementById('downloadTemplateButton');
     const csvFileInput = document.getElementById('csvFileInput');
     const processButton = document.getElementById('processButton');
-    const downloadLink = document.getElementById('downloadLink'); // Ensure this is selected
+    const downloadLink = document.getElementById('downloadLink');
 
     if (downloadTemplateButton) {
         downloadTemplateButton.addEventListener('click', handleTemplateDownload);
@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (csvFileInput) {
         csvFileInput.addEventListener('change', () => {
             if (processButton) {
+                // Enable process button only if a file is selected
                 processButton.disabled = !csvFileInput.files.length;
             }
         });
@@ -30,45 +31,6 @@ document.addEventListener('DOMContentLoaded', () => {
         processButton.addEventListener('click', handleBulkVerification);
     }
 });
-
-// --- SINGLE VERIFICATION HANDLER (No Access Code Required) ---
-async function handleSingleVerification() {
-    const rawAddress = document.getElementById('rawAddress').value;
-    const customerName = document.getElementById('customerName').value;
-    const loadingMessage = document.getElementById('loading-message');
-    const resultsContainer = document.getElementById('resultsContainer');
-
-    if (rawAddress.trim() === "") {
-        alert("Please enter a raw address to verify.");
-        return;
-    }
-
-    document.getElementById('verifyButton').disabled = true;
-    loadingMessage.style.display = 'block';
-    resultsContainer.style.display = 'none';
-
-    try {
-        // NOTE: fetchVerification is called without an accessCode here
-        const result = await fetchVerification(rawAddress, customerName); 
-
-        if (result.status === "Success") {
-            displayResults(result);
-        } else {
-            alert(`Verification Failed: ${result.error || result.remarks || "Unknown error."}`);
-            displayErrorResult(result);
-        }
-
-    } catch (e) {
-        console.error("Fetch Error:", e);
-        alert("A network error occurred. Check the console for details.");
-    } finally {
-        document.getElementById('verifyButton').disabled = false;
-        loadingMessage.style.display = 'none';
-        resultsContainer.style.display = 'block';
-    }
-}
-// --- END SINGLE VERIFICATION HANDLER ---
-
 
 // --- API FETCH FUNCTION (Handles Access Code) ---
 async function fetchVerification(address, name, accessCode = null) {
@@ -85,7 +47,7 @@ async function fetchVerification(address, name, accessCode = null) {
             body: JSON.stringify(bodyData) // Use the dynamic bodyData
         });
 
-        // Handle unauthorized error specifically
+        // Handle unauthorized error specifically (401 from Vercel API)
         if (response.status === 401) {
              return { 
                 status: "Error", 
@@ -112,6 +74,43 @@ async function fetchVerification(address, name, accessCode = null) {
 }
 // --- END API FETCH FUNCTION ---
 
+// --- SINGLE VERIFICATION HANDLER (No Access Code Required) ---
+async function handleSingleVerification() {
+    const rawAddress = document.getElementById('rawAddress').value;
+    const customerName = document.getElementById('customerName').value;
+    const loadingMessage = document.getElementById('loading-message');
+    const resultsContainer = document.getElementById('resultsContainer');
+
+    if (rawAddress.trim() === "") {
+        alert("Please enter a raw address to verify.");
+        return;
+    }
+
+    document.getElementById('verifyButton').disabled = true;
+    loadingMessage.style.display = 'block';
+    resultsContainer.style.display = 'none';
+
+    try {
+        const result = await fetchVerification(rawAddress, customerName); 
+
+        if (result.status === "Success") {
+            displayResults(result);
+        } else {
+            alert(`Verification Failed: ${result.error || result.remarks || "Unknown error."}`);
+            displayErrorResult(result);
+        }
+
+    } catch (e) {
+        console.error("Fetch Error:", e);
+        alert("A network error occurred. Check the console for details.");
+    } finally {
+        document.getElementById('verifyButton').disabled = false;
+        loadingMessage.style.display = 'none';
+        resultsContainer.style.display = 'block';
+    }
+}
+// --- END SINGLE VERIFICATION HANDLER ---
+
 
 // --- BULK VERIFICATION HANDLER (CRITICAL CHANGE) ---
 async function handleBulkVerification() {
@@ -127,13 +126,13 @@ async function handleBulkVerification() {
         return;
     }
 
-    // ⭐ CRITICAL: PROMPT FOR ACCESS CODE IS HERE ⭐
-    const accessCode = prompt("Enter Access Code for Bulk Verification:");
+    // ⭐ CRITICAL: RETRIEVE ACCESS CODE FROM SESSION STORAGE ⭐
+    const accessCode = sessionStorage.getItem('bulkAccessCode');
     if (!accessCode) {
-        alert("Bulk verification cancelled. Access code is required.");
+        alert("Bulk verification cancelled. Please return to the home page and re-enter the access code.");
         return;
     }
-    // ---------------------------------------------
+    // --------------------------------------------------------
     
     processButton.disabled = true;
     fileInput.disabled = true;
@@ -182,13 +181,13 @@ async function handleBulkVerification() {
             if (rawAddress.trim() === "") {
                  verificationResult = { status: "Skipped", customerCleanName: customerName, remarks: "Skipped: Address is empty.", addressQuality: "BAD" };
             } else {
-                // ⭐ CRITICAL: PASS accessCode HERE ⭐
+                // ⭐ CRITICAL: PASS accessCode FROM SESSION STORAGE HERE ⭐
                 verificationResult = await fetchVerification(rawAddress, customerName, accessCode);
             }
 
             // Check for unauthorized access error from the API
             if (verificationResult.error && verificationResult.error.includes("Unauthorized Access")) {
-                 statusMessage.textContent = `Processing failed: Unauthorized Access. Please reload and enter the correct code.`;
+                 statusMessage.textContent = `Processing failed: Unauthorized Access. Please reload the home page and enter the correct code.`;
                  progressBarFill.style.width = '100%';
                  processButton.disabled = false;
                  fileInput.disabled = false;
@@ -234,7 +233,7 @@ async function handleBulkVerification() {
 // --- END BULK VERIFICATION HANDLER ---
 
 
-// --- UTILITY FUNCTIONS (Condensed for brevity) ---
+// --- UTILITY FUNCTIONS (Your existing utility functions) ---
 function handleTemplateDownload() {
     const headers = ["ORDER ID", "CUSTOMER NAME", "CUSTOMER RAW ADDRESS"];
     const exampleRow = ["ORD12345", "Rajesh Sharma", "H.No. 45, Near Axis Bank, Sector 20, Noida 201301"];
@@ -253,7 +252,7 @@ function createAndDownloadCSV(dataArray, filename) {
         downloadLink.setAttribute('href', url);
         downloadLink.setAttribute('download', filename);
         downloadLink.style.display = 'block';
-        downloadLink.click();
+        // downloadLink.click(); // Removed to allow manual click
     } else {
         // Fallback for older browsers
         const link = document.createElement("a");
@@ -267,7 +266,6 @@ function createAndDownloadCSV(dataArray, filename) {
 }
 
 function displayResults(data) {
-    // ... (Your existing display logic)
     document.getElementById('out-name').textContent = data.customerCleanName || 'N/A';
     document.getElementById('out-address').textContent = data.addressLine1 || 'N/A';
     document.getElementById('out-landmark').textContent = data.landmark || 'N/A';
@@ -279,7 +277,6 @@ function displayResults(data) {
 }
 
 function displayErrorResult(data) {
-    // ... (Your existing error display logic)
     document.getElementById('out-name').textContent = data.customerCleanName || '---';
     document.getElementById('out-address').textContent = data.addressLine1 || 'API ERROR';
     document.getElementById('out-landmark').textContent = '---';
