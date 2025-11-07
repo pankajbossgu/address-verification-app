@@ -6,6 +6,9 @@
     <title>AI Address Verification</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+        // Set the API endpoint for quick verification
+        const API_ENDPOINT = "https://address-verification-app.vercel.app/api/verify-single-address";
+
         // Re-use your color palette for consistency
         tailwind.config = {
             theme: {
@@ -25,25 +28,48 @@
         }
         
         /**
-         * Function to prompt the user for the Bulk Access Code 
-         * and save it to session storage before navigating.
+         * Function to prompt the user for the Bulk Access Code and verify it 
+         * via an API call before navigating.
          */
-        function promptForBulkAccess(event) {
-            // Prevent the default link action (which would navigate immediately)
+        async function promptForBulkAccess(event) {
             event.preventDefault(); 
             
-            // IMPORTANT: Prompt the user for the code
             const accessCode = prompt("🔐 Enter Access Code for Bulk Verification:");
             
-            if (accessCode && accessCode.trim() !== '') {
-                // If a code is entered, save it to session storage 
-                // so the bulk handler can retrieve it later.
-                sessionStorage.setItem('bulkAccessCode', accessCode.trim());
-                
-                // Now, navigate to the bulk page
-                window.location.href = "bulk.html";
-            } else {
+            if (!accessCode || accessCode.trim() === '') {
                 alert("Bulk verification cancelled. Access code is required.");
+                return;
+            }
+
+            try {
+                // 1. Send the code to the Vercel API for verification
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        accessCode: accessCode.trim(),
+                        quickCheck: true // Signal the backend to ONLY check the code
+                    })
+                });
+
+                // 2. Check the response status
+                if (response.status === 200) {
+                    // Success! Code is correct.
+                    // Save the code to session storage for the bulk page
+                    sessionStorage.setItem('bulkAccessCode', accessCode.trim());
+                    // Redirect the user
+                    window.location.href = "bulk.html";
+                } else if (response.status === 401) {
+                    // Unauthorized - Code is wrong
+                    alert("❌ Invalid Access Code. Please try again.");
+                } else {
+                    // Other server errors
+                    alert("Server error during access code verification. Try again later.");
+                }
+
+            } catch (e) {
+                console.error("Network Error during code verification:", e);
+                alert("A network error occurred. Could not verify access code.");
             }
         }
     </script>
