@@ -176,4 +176,23 @@
                 <p id="modalErrorMessage" class="text-danger-red text-sm mb-4 font-medium h-4"></p>
 
                 <div class="flex space-x-3">
-                    <button id="modalVerifyButton" onclick
+                    <button id="modalVerifyButton" onclick="verifyAccessCode()" class="flex-1 py-3 bg-primary-blue text-white font-bold rounded-lg hover:bg-blue-700 transition duration-150">
+                        Verify Code
+                    </button>
+                    <button onclick="hideAccessModal()" class="flex-1 py-3 bg-gray-200 text-gray-800 font-bold rounded-lg hover:bg-gray-300 transition duration-150">
+                        Cancel
+                    </button>
+                </div>
+                
+                <div class="text-center mt-6">
+                    <a href="https://wa.me/xxxxxxxxxx" target="_blank" class="text-xs text-whatsapp-green font-semibold hover:underline inline-flex items-center">
+                        Contact Developer on WhatsApp
+                        <svg class="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12.04 2c-5.55 0-10 4.49-10 10 0 1.93.55 3.75 1.54 5.34l-1.07 3.91 4.02-1.05c1.55.84 3.32 1.3 5.51 1.3 5.54 0 10-4.49 10-10s-4.49-10-10-10zm-1.88 15.68h-1.57c-.24 0-.44-.06-.6-.17-.16-.11-.25-.26-.25-.45v-1.74c0-.24.09-.43.27-.56.17-.14.37-.2.6-.2h1.57c.24 0 .44.06.6.17.16.11.25.26.25.45v1.74c0 .24-.09.43-.27.56-.17.14-.37.2-.6.2zm.89-6.38c-.37-.08-.75-.12-1.12-.12-1.46 0-2.45.36-2.97 1.09-.52.73-.78 1.9-.78 3.52v.03c0 .24.08.43.24.57.17.14.37.2.6.2h1.72c.24 0 .44-.06.6-.17.16-.11.25-.26.25-.45v-.03c0-.98.24-1.66.72-2.03.48-.38 1.15-.56 2.01-.56.44 0 .85.05 1.25.16.4.11.75.25 1.05.43.3.18.55.4.74.67.19.27.34.6.46.99.12.39.18.84.18 1.35v.03c0 .24.08.43.24.57.17.14.37.2.6.2h1.72c.24 0 .44-.06.6-.17.16-.11.25-.26.25-.45v-.03c0-1.8-.46-3.23-1.39-4.28-.93-1.05-2.22-1.57-3.87-1.57-.45 0-.89.05-1.33.15-.44.1-.85.26-1.23.46-.38.2-.72.46-1.02.78-.3.32-.54.7-.72 1.14-.18.44-.27.94-.27 1.51v.03z"/></svg>
+                    </a>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</body>
+</html>
